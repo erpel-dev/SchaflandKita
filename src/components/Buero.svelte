@@ -10,8 +10,9 @@
   import { datumPlus, datumLang, istZeit, zeitpunktText } from "../lib/zeit.js";
   import { fotoVerkleinern, herunterladen } from "../lib/foto.js";
   import { sag, canSpeak } from "../lib/sprechen.js";
+  import { nfc } from "../lib/nfc.svelte.js";
 
-  let { onClose } = $props();
+  let { onClose, tag = null } = $props();
   let tab = $state("profile");
 
   // ---------- Profile ----------
@@ -63,7 +64,7 @@
   let impFertig = $state("");
 
   async function exportieren() {
-    const daten = exportDaten($state.snapshot(kita.profile), { tage: mitProtokoll ? await kita.alleTage() : null });
+    const daten = exportDaten($state.snapshot(kita.profile), { tage: mitProtokoll ? await kita.alleTage() : null, tags: $state.snapshot(kita.tags) });
     herunterladen(`schafland-kita-profile-${kita.datum}.json`, JSON.stringify(daten, null, 2));
   }
   async function einlesen(ev) {
@@ -80,12 +81,12 @@
     }
     const r = pruefeImport(daten);
     if (!r.ok) return (impFehler = r.fehler);
-    imp = { profile: r.profile, tage: r.tage, v: vorschau($state.snapshot(kita.profile), r.profile) };
+    imp = { profile: r.profile, tage: r.tage, tags: r.tags, v: vorschau($state.snapshot(kita.profile), r.profile) };
     impModus = "zusammenfuehren";
   }
   async function uebernehmen() {
     const n = imp.profile.length;
-    await kita.importieren(imp.profile, impModus, imp.tage);
+    await kita.importieren(imp.profile, impModus, imp.tage, imp.tags);
     imp = null; form = null;
     impFertig = `${n} ${n === 1 ? "Profil" : "Profile"} übernommen`;
   }
@@ -113,6 +114,46 @@
     nLoeschFrage = null;
   }
 
+  // ---------- NFC-Anhänger ----------
+  const NFC_TEXT = {
+    unbekannt: "wird geprüft …",
+    fehlt: "Dieses Gerät oder dieser Browser kann keine NFC-Anhänger lesen. Es geht mit Chrome auf einem Android-Gerät mit NFC.",
+    antippen: "NFC ist noch nicht erlaubt.",
+    erlaubt: "NFC ist erlaubt, aber gerade ausgeschaltet.",
+    bereit: "Bereit: Anhänger ans Gerät halten.",
+    verweigert: "NFC wurde nicht erlaubt. In den Website-Einstellungen des Browsers lässt es sich wieder erlauben.",
+    fehler: "NFC lässt sich nicht einschalten.",
+  };
+  let gelesen = $state(null); // Kennung des zuletzt im Büro hingehaltenen Anhängers
+  let nfcHinweis = $state("");
+  let tagListe = $derived(
+    kita.tags
+      .map((t) => ({ ...t, name: kita.profil(t.profilId)?.name ?? "" }))
+      .sort((a, b) => a.name.localeCompare(b.name, "de") || a.id.localeCompare(b.id)),
+  );
+  $effect(() => {
+    nfc.pruefen();
+  });
+  // Im Büro hingehaltener Anhänger: zum NFC-Reiter springen und ihn dort zeigen
+  $effect(() => {
+    if (!tag) return;
+    tab = "nfc";
+    gelesen = tag.id;
+    nfcHinweis = tag.id ? "" : "Dieser Anhänger lässt sich nicht lesen.";
+  });
+  async function nfcSchalten(an) {
+    await settings.set({ nfc: an });
+    if (an) nfc.start(true);
+    else nfc.stop();
+  }
+  async function tagSetzen(id, profilId) {
+    if (profilId) await kita.tagZuordnen(id, profilId);
+  }
+  async function tagAufheben(id) {
+    await kita.tagAufheben(id);
+    if (gelesen === id) gelesen = null;
+  }
+
   // ---------- Einstellungen ----------
   function zeitSetzen(i, feld, wert) {
     if (feld === "zeit" && !istZeit(wert)) return;
@@ -131,7 +172,7 @@
     <Sheep size="2.6rem" />
     <div><b>Büro</b><small>Version {__APP_VERSION__}</small></div>
     <nav>
-      {#each [["profile", "Profile"], ["protokoll", "Protokoll"], ["nachrichten", "Nachrichten"], ["einstellungen", "Einstellungen"]] as [id, name] (id)}
+      {#each [["profile", "Profile"], ["protokoll", "Protokoll"], ["nachrichten", "Nachrichten"], ["nfc", "NFC"], ["einstellungen", "Einstellungen"]] as [id, name] (id)}
         <button class:an={tab === id} onclick={() => (tab = id)}>{name}</button>
       {/each}
     </nav>
@@ -154,6 +195,7 @@
         <b>Import-Vorschau:</b>
         <span data-test="imp-zahlen">{imp.v.neu.length} neu, {imp.v.geaendert.length} geändert, {imp.v.gleich.length} gleich</span>
         {#if imp.tage.length}<span>· {imp.tage.length} Protokollzeilen</span>{/if}
+        {#if imp.tags.length}<span>· {imp.tags.length} NFC-Anhänger</span>{/if}
         <div class="modus">
           <label><input type="radio" bind:group={impModus} value="zusammenfuehren" /> Zusammenführen (nichts wird gelöscht)</label>
           <label><input type="radio" bind:group={impModus} value="ersetzen" /> Ersetzen{#if imp.v.fehlen.length}&nbsp;({imp.v.fehlen.length} vorhandene {imp.v.fehlen.length === 1 ? "Profil wird" : "Profile werden"} gelöscht: {imp.v.fehlen.map((p) => p.name).join(", ")}){/if}</label>
@@ -279,6 +321,42 @@
         <p class="hinweis">Noch keine Nachrichten.</p>
       {/if}
     </div>
+  {:else if tab === "nfc"}
+    <div class="karte einst nfc">
+      <div class="reihe"><label for="s-nfc">NFC-Anhänger lesen</label><Toggle id="s-nfc" label="NFC-Anhänger lesen" checked={settings.value.nfc} onchange={nfcSchalten} />
+        {#if settings.value.nfc && (nfc.status === "antippen" || nfc.status === "erlaubt" || nfc.status === "fehler")}<button class="big-btn small" onclick={() => nfc.start(true)}>NFC einschalten</button>{/if}
+      </div>
+      <p class="muted" data-test="nfc-status">{settings.value.nfc || nfc.status === "fehlt" ? NFC_TEXT[nfc.status] : "Ausgeschaltet."}{nfc.status === "fehler" && nfc.fehler ? ` ${nfc.fehler}.` : ""}</p>
+      <p class="muted">Ein neuer Anhänger wird beim ersten Hinhalten einem Profil zugeordnet. Danach öffnet er das Fenster des Profils; noch einmal hinhalten meldet an oder ab. Hier lassen sich Zuordnungen ändern oder aufheben. Zum Finden: Anhänger jetzt ans Gerät halten.</p>
+      {#if nfcHinweis}<p class="err" data-test="nfc-hinweis">{nfcHinweis}</p>{/if}
+      {#if gelesen && !kita.tagProfil(gelesen)}
+        <div class="reihe neu" data-test="nfc-neu">
+          <span class="emoji">🏷️</span> <b>Neuer Anhänger</b> <code>{gelesen}</code>
+          <select aria-label="Neuen Anhänger zuordnen" value="" onchange={(e) => tagSetzen(gelesen, e.currentTarget.value)}>
+            <option value="">— zuordnen —</option>
+            {#each kita.profile as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+          </select>
+        </div>
+      {/if}
+      {#if tagListe.length}
+        <table>
+          <thead><tr><th>Anhänger</th><th>Gehört</th><th></th></tr></thead>
+          <tbody>
+            {#each tagListe as t (t.id)}
+              <tr class:gelesen={t.id === gelesen} data-tag={t.id}>
+                <td><code>{t.id}</code></td>
+                <td><select aria-label={`Besitzer von ${t.id}`} value={t.profilId} onchange={(e) => tagSetzen(t.id, e.currentTarget.value)}>
+                  {#each kita.profile as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+                </select></td>
+                <td><button class="big-btn light small" onclick={() => tagAufheben(t.id)}>Aufheben</button></td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else}
+        <p class="hinweis">Noch kein Anhänger zugeordnet.</p>
+      {/if}
+    </div>
   {:else}
     <div class="karte einst">
       <div class="reihe"><label for="s-toene">Töne</label><Toggle id="s-toene" label="Töne" checked={settings.value.toene} onchange={(v) => settings.set({ toene: v })} /></div>
@@ -360,6 +438,10 @@
   .einst { margin: 1rem 1.2rem 0; display: flex; flex-direction: column; gap: 0.8rem; max-width: 46rem; }
   .reihe { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
   .reihe > label { min-width: 15rem; }
+  .nfc { max-width: 52rem; }
+  .nfc .neu { background: #fff8e1; border: 2px solid var(--sun); border-radius: 0.9rem; padding: 0.5rem 0.8rem; }
+  tr.gelesen td { background: var(--ok-bg); }
+  code { font-size: 0.95rem; }
   .slot .em { width: 4rem; text-align: center; }
   .slot .txt { flex: 1; }
 

@@ -58,9 +58,10 @@ function normalisiereTag(roh, ids) {
   };
 }
 
-/** Inhalt der Export-Datei. tage (das Protokoll) ist optional. */
-export function exportDaten(profile, { tage = null, jetzt = new Date() } = {}) {
+/** Inhalt der Export-Datei. tage (das Protokoll) ist optional; tags sind die NFC-Anhänger. */
+export function exportDaten(profile, { tage = null, tags = [], jetzt = new Date() } = {}) {
   const daten = { format: FORMAT, version: VERSION, exportiertAm: jetzt.toISOString(), profile: profile.map((p) => ({ ...p })) };
+  if (tags.length) daten.tags = tags.map((t) => ({ id: t.id, profilId: t.profilId }));
   if (tage) daten.tage = tage.map((t) => ({ ...t }));
   return daten;
 }
@@ -75,7 +76,13 @@ export function pruefeImport(daten) {
     const ids = new Set(profile.map((p) => p.id));
     if (ids.size !== profile.length) throw new Error("Zwei Profile haben dieselbe id");
     const tage = Array.isArray(daten.tage) ? daten.tage.map((t) => normalisiereTag(t, ids)).filter(Boolean) : [];
-    return { ok: true, profile, tage };
+    // NFC-Anhänger: nur solche, deren Profil in der Datei steht; jede Kennung einmal
+    const tags = new Map();
+    for (const t of Array.isArray(daten.tags) ? daten.tags : []) {
+      const id = typeof t?.id === "string" ? t.id.trim().toLowerCase() : "";
+      if (id && id.length <= 64 && ids.has(t.profilId)) tags.set(id, { id, profilId: t.profilId });
+    }
+    return { ok: true, profile, tage, tags: [...tags.values()] };
   } catch (err) {
     return { ok: false, fehler: err.message };
   }

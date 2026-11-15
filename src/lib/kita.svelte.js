@@ -3,12 +3,15 @@ import { db, kvGet, kvSet } from "./db.js";
 import { datumStr, zeitStr, tageVonBis } from "./zeit.js";
 import { normalisiereProfil, sortiereProfile, zusammenfuehren, neueId } from "./profile-io.js";
 import { REAKTIONEN, BILDER, MAX_TEXT } from "./nachrichten.js";
+import { tagId } from "./nfc.svelte.js";
 import { BEISPIELE } from "./beispiele.js";
 
 class Kita {
   profile = $state([]);
   /** Einträge von heute: profilId → { status, gekommenUm, abholzeit, gegangenUm, meldungBis } */
   heute = $state({});
+  /** NFC-Anhänger: [{ id, profilId, zugeordnetAm }] */
+  tags = $state([]);
   /** Pinnwand, neueste zuerst */
   nachrichten = $state([]);
   /** Bis hierhin wurde die Pinnwand schon angesehen (für den Zähler neuer Nachrichten) */
@@ -31,6 +34,7 @@ class Kita {
     this.profile = sortiereProfile(liste);
     this.nachrichten = (await db.nachrichten.toArray()).sort((a, b) => b.erstelltAm.localeCompare(a.erstelltAm));
     this.gesehenBis = await kvGet("pinnwandGesehen", "");
+    this.tags = await db.tags.toArray();
     await this.#tagLaden();
   }
 
@@ -118,11 +122,13 @@ class Kita {
   }
 
   async profilLoeschen(id) {
-    await db.transaction("rw", db.profile, db.tage, async () => {
+    await db.transaction("rw", db.profile, db.tage, db.tags, async () => {
       await db.profile.delete(id);
       await db.tage.where("profilId").equals(id).delete();
+      await db.tags.where("profilId").equals(id).delete();
     });
     this.profile = this.profile.filter((p) => p.id !== id);
+    this.tags = this.tags.filter((t) => t.profilId !== id);
     const { [id]: _, ...rest } = this.heute;
     this.heute = rest;
     // Seine Reaktionen verschwinden; seine Nachrichten bleiben mit dem Namen stehen
@@ -130,6 +136,31 @@ class Kita {
       const { [id]: weg, ...reaktionen } = $state.snapshot(n.reaktionen);
       await this.#nachrichtErsetzen({ ...$state.snapshot(n), reaktionen });
     }
+  }
+
+  // ---------- NFC-Anhänger ----------
+
+  /** Wem gehört dieser Anhänger? id des Profils oder null. */
+  tagProfil(id) {
+    const kennung = tagId(id);
+    return this.tags.find((t) => t.id === kennung)?.profilId ?? null;
+  }
+
+  /** Anhänger einem Profil zuordnen; eine frühere Zuordnung desselben Anhängers wird ersetzt. */
+  async tagZuordnen(id, profilId) {
+    const kennung = tagId(id);
+    if (!kennung) throw new Error("Dieser Anhänger hat keine lesbare Kennung");
+    if (!this.profil(profilId)) throw new Error("Unbekanntes Profil");
+    const tag = { id: kennung, profilId, zugeordnetAm: this.jetzt.toISOString() };
+    await db.tags.put(tag);
+    this.tags = [...this.tags.filter((t) => t.id !== kennung), tag];
+    return tag;
+  }
+
+  async tagAufheben(id) {
+    const kennung = tagId(id);
+    await db.tags.delete(kennung);
+    this.tags = this.tags.filter((t) => t.id !== kennung);
   }
 
   // ---------- Pinnwand ----------
@@ -176,16 +207,20 @@ class Kita {
   }
 
   /** Geprüfte Profile (aus pruefeImport) übernehmen. modus: "zusammenfuehren" | "ersetzen" */
-  async importieren(profile, modus = "zusammenfuehren", tage = []) {
+  async importieren(profile, modus = "zusammenfuehren", tage = [], tags = []) {
     const liste = zusammenfuehren($state.snapshot(this.profile), $state.snapshot(profile), modus);
     const ids = new Set(liste.map((p) => p.id));
-    await db.transaction("rw", db.profile, db.tage, async () => {
+    const zeit = this.jetzt.toISOString();
+    await db.transaction("rw", db.profile, db.tage, db.tags, async () => {
       await db.profile.clear();
       await db.profile.bulkPut(liste);
       await db.tage.filter((e) => !ids.has(e.profilId)).delete();
+      await db.tags.filter((t) => !ids.has(t.profilId)).delete();
       if (tage.length) await db.tage.bulkPut($state.snapshot(tage));
+      if (tags.length) await db.tags.bulkPut($state.snapshot(tags).map((t) => ({ id: t.id, profilId: t.profilId, zugeordnetAm: zeit })));
     });
     this.profile = sortiereProfile(liste);
+    this.tags = await db.tags.toArray();
     await this.#tagLaden();
   }
 

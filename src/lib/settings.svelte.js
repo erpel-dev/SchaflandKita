@@ -12,6 +12,7 @@ export const STANDARD_ZEITEN = [
 const DEFAULTS = {
   toene: true, // Geräusche beim Antippen, Anmelden, Abholen
   ansage: true, // das Schaf sagt den Namen an („Hallo Wolli!“)
+  nfc: true, // NFC-Anhänger lesen, wo das Gerät es kann
   schritt: 15, // Plus und Minus verstellen die Abholzeit um so viele Minuten
   zeiten: STANDARD_ZEITEN, // die sechs großen Zeitknöpfe
 };
