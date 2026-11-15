@@ -9,9 +9,13 @@
   import NfcZuordnen from "./components/NfcZuordnen.svelte";
   import { nfc } from "./lib/nfc.svelte.js";
   import { settings } from "./lib/settings.svelte.js";
+  import { sortierePlan, planStand } from "./lib/tagesplan.js";
+  import { aktionById } from "./lib/aktionen.js";
+  import { sag } from "./lib/sprechen.js";
+  import { untrack } from "svelte";
   import { kita } from "./lib/kita.svelte.js";
   import { update } from "./lib/update.svelte.js";
-  import { unlockAudio, pop } from "./lib/sounds.js";
+  import { unlockAudio, pop, hallo } from "./lib/sounds.js";
 
   let gestartet = $state(false);
   let ansicht = $state("terminal"); // "terminal" | "uebersicht" | "pinnwand"
@@ -29,10 +33,38 @@
     clearTimeout(hinweisTimer);
     hinweisTimer = setTimeout(() => (hinweis = ""), 3500);
   }
-  function waehle(id, mitTag = false) {
+  let fensterStart = $state(""); // "abholen": Fenster gleich bei „Wer holt ab?“ öffnen
+  function waehle(id, mitTag = false, start = "") {
     perTag = mitTag;
+    fensterStart = start;
     gewaehlt = id;
   }
+
+  // Aktive Aktion steuert das Farbschema (siehe app.css)
+  $effect(() => {
+    const id = aktionById(settings.value.aktion)?.id;
+    if (id) document.documentElement.dataset.aktion = id;
+    else delete document.documentElement.dataset.aktion;
+  });
+
+  // Tagesplan: ansagen, wenn ein neuer Punkt beginnt
+  let planPunkt = $derived.by(() => {
+    const plan = sortierePlan(settings.value.tagesplan);
+    return plan[planStand(plan, kita.uhrzeit)] ?? null;
+  });
+  let angesagt = null;
+  $effect(() => {
+    const schluessel = planPunkt ? `${kita.datum} ${planPunkt.zeit} ${planPunkt.text}` : null;
+    untrack(() => {
+      // nur beim Wechsel während des Spielens, nicht beim Start und nicht beim Ändern im Büro
+      if (angesagt !== null && schluessel && schluessel !== angesagt && gestartet && !buero && settings.value.planAnsage) {
+        melde(`${planPunkt.bild} Jetzt: ${planPunkt.text}`);
+        hallo();
+        sag(`Jetzt ist ${planPunkt.text}!`);
+      }
+      angesagt = schluessel ?? "";
+    });
+  });
 
   // NFC: unbekannter Anhänger → zuordnen; bekannter → Fenster des Profils, noch einmal → bestätigen
   let tagNr = 0;
@@ -75,6 +107,8 @@
     gestartet = true;
     // Aus diesem Antippen heraus darf der Browser nach der NFC-Erlaubnis fragen
     if (settings.value.nfc) nfc.start(true);
+    const aktion = aktionById(settings.value.aktion);
+    if (aktion) sag(aktion.gruss);
   }
   function onKey(e) {
     // Strg + , öffnet das Büro auch mit der Tastatur
@@ -96,7 +130,7 @@
   <div class="app">
     <TopBar {ansicht} onBuero={() => { gewaehlt = null; neuerTag = null; bueroTag = null; buero = true; }} onAnsicht={(a) => { pop(); ansicht = a; }} />
     {#if ansicht === "uebersicht"}
-      <Uebersicht onSelect={(id) => waehle(id)} />
+      <Uebersicht onSelect={(id) => waehle(id)} onAbholen={(id) => waehle(id, false, "abholen")} />
     {:else if ansicht === "pinnwand"}
       <Pinnwand />
     {:else}
@@ -104,7 +138,7 @@
     {/if}
   </div>
   {#if gewaehlt}
-    {#key gewaehlt}<ProfilFenster bind:this={fenster} id={gewaehlt} {perTag} onClose={() => (gewaehlt = null)} />{/key}
+    {#key gewaehlt}<ProfilFenster bind:this={fenster} id={gewaehlt} {perTag} start={fensterStart} onClose={() => (gewaehlt = null)} />{/key}
   {/if}
   {#if neuerTag}
     <NfcZuordnen tag={neuerTag} onDone={(id) => { neuerTag = null; waehle(id, true); }} onClose={() => (neuerTag = null)} />

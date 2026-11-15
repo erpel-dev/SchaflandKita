@@ -64,3 +64,51 @@ input, select { font: inherit; color: inherit; }
 
 .big-btn.rot { background: var(--nose); color: var(--ink); box-shadow: 0 0.25rem 0 #d4788a; }
 .big-btn.small { font-size: 1.05rem; padding: 0.5rem 0.9rem; border-radius: 0.9rem; }
+
+/* Zustandsfarbe „da“: bleibt in jeder Aktion grün, damit sie nie mit „krank“ verwechselt wird */
+:root { --da: #6cae4f; --da-dark: #3f7a2c; --da-bg: #f0f8ea; }
+
+/* ---------- Aktion: Sommerfest ---------- */
+/* Strahlender Sommertag: kräftig blauer Himmel, der zur Wiese hin sonnengelb wird */
+:root[data-aktion="sommerfest"] {
+  --wool: #fffdf2;
+  --wool-2: #f6f0d8;
+  --wool-line: #e8dfbd;
+  --sky: #8fd4ff;
+  --sky-bottom: #fff2b3;
+  --sun: #ff9f1c;
+  --meadow: #7cc24f;
+}
+
+/* ---------- Aktion: Kürbisfest ---------- */
+/* Goldener Herbstnachmittag: warmer Himmel, Kürbis-Orange statt Wiesengrün, Stoppelfeld */
+:root[data-aktion="kuerbisfest"] {
+  --wool: #fff6ea;
+  --wool-2: #f4dfc8;
+  --wool-line: #e6c7a6;
+  --grass: #ef7a1a;
+  --grass-dark: #a64b07;
+  --sky: #ffd08a;
+  --sky-bottom: #ffecc9;
+  --sky-ink: #4a2c0a;
+  --sky-ink-soft: #8a5a2b;
+  --meadow: #b98a3c;
+  --ok-bg: #ffeccf;
+}
+
+/* ---------- Aktion: Weihnachtsmarkt ---------- */
+/* Winterabend: dunkelblauer Himmel, Schnee auf der Wiese, Weihnachtsrot für Knöpfe */
+:root[data-aktion="weihnachtsmarkt"] {
+  --wool: #fffaf2;
+  --wool-2: #f3ebdf;
+  --wool-line: #e5d6c2;
+  --grass: #c8323c;
+  --grass-dark: #8c1d25;
+  --sky: #1b2a4e;
+  --sky-bottom: #3d5d92;
+  --sky-ink: #fff8ea;
+  --sky-ink-soft: #bcd3f5;
+  --sun: #ffcf3f;
+  --meadow: #f4f8fc;
+  --ok-bg: #fdecec;
+}

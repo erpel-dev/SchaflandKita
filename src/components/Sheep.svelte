@@ -7,7 +7,9 @@
     grau: ["#d4d2cb", "#a9a69c"],
     rosa: ["#fbd0d8", "#e79aab"],
   };
+  import { settings } from "../lib/settings.svelte.js";
   let { size = "3rem", class: cls = "", wolle = "weiss" } = $props();
+  let kostuem = $derived(settings.value.aktion);
   let fell = $derived(FELL[wolle] ?? FELL.weiss);
 </script>
 
@@ -26,4 +28,30 @@
   <circle cx="25.6" cy="50.6" r="1.6" fill="#2b2b2b" /><circle cx="35.6" cy="50.6" r="1.6" fill="#2b2b2b" />
   <ellipse cx="30" cy="62" rx="5" ry="3" fill="#f29bab" />
   <g fill={fell[0]}><circle cx="24" cy="38" r="6" /><circle cx="31" cy="35" r="6.5" /><circle cx="38" cy="38" r="6" /></g>
+  {#if kostuem === "sommerfest"}
+    <!-- Sonnenbrille und Partyhut -->
+    <path d="M28.5 49.6h2.5" stroke="#ffd23f" stroke-width="1.8" />
+    <g fill="#3a2a5c" stroke="#ffd23f" stroke-width="1.5"><rect x="18.6" y="46" width="10" height="7.6" rx="3" /><rect x="30.9" y="46" width="10" height="7.6" rx="3" /></g>
+    <path d="M21 48.5l3-1M33 48.5l3-1" stroke="#fff" stroke-width="1" stroke-linecap="round" opacity="0.7" />
+    <g transform="rotate(-12 31 36)">
+      <path d="M22 35L31 9l10 26z" fill="#ff5d8f" />
+      <path d="M27.5 19l8.5 3M25 27l13 4" stroke="#ffd23f" stroke-width="2.2" />
+      <circle cx="31" cy="9" r="3.6" fill="#ffd23f" />
+    </g>
+  {:else if kostuem === "kuerbisfest"}
+    <!-- Kürbishut -->
+    <g transform="rotate(-10 31 36)">
+      <path d="M30 20q-1-7 4-9" fill="none" stroke="#5c8a2c" stroke-width="3.4" stroke-linecap="round" />
+      <ellipse cx="31" cy="28" rx="15.5" ry="10" fill="#ef7a1a" stroke="#c25e0c" stroke-width="1" />
+      <path d="M31 18.5v19M24 20q-3.5 8 0 16.5M38 20q3.5 8 0 16.5" fill="none" stroke="#c25e0c" stroke-width="1.3" />
+    </g>
+  {:else if kostuem === "weihnachtsmarkt"}
+    <!-- Weihnachtsmütze, Zipfel fällt nach hinten -->
+    <g transform="rotate(-8 31 36)">
+      <path d="M18 35C19 20 30 9 45 11c6 1 9 6 7 13-4-5-9-6-12-4 2 4 3 9 3 15z" fill="#d42d3a" />
+      <path d="M40 20c-3 2-4 7-3 15" fill="none" stroke="#a51f2b" stroke-width="1.2" />
+      <rect x="15.5" y="31" width="30" height="7" rx="3.5" fill="#fffdf7" stroke="#e6e0d0" stroke-width="0.8" />
+      <circle cx="51" cy="25" r="4.6" fill="#fffdf7" stroke="#e6e0d0" stroke-width="0.8" />
+    </g>
+  {/if}
 </svg>

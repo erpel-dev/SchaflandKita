@@ -64,6 +64,8 @@ try {
   await page.getByRole("button", { name: "Kita öffnen" }).click();
   await eq("Erster Start: sieben Beispielprofile, alle noch nicht da", async () => namen("offen"), ["Erpelküken", "Scheepi", "Wolli", "Eichel", "Erpel", "Lola", "Manfred"]);
   check("Uhr zeigt Montag 08:12", (await page.locator(".uhr").textContent()).replace(/\s+/g, " ").trim() === "Montag 08:12");
+  await eq("Tagesplan zeigt neun Punkte", async () => page.locator(".plan .punkt").count(), 9);
+  await eq("Tagesplan: um 08:12 läuft „Ankommen“", async () => page.locator(".punkt.jetzt b").allTextContents(), ["Ankommen"]);
   await shot("02-terminal-leer");
 
   // ---------- Anmelden ----------
@@ -112,6 +114,9 @@ try {
 
   // ---------- Übersicht ----------
   await page.clock.fastForward("04:58:00"); // 13:10
+  await eq("Tagesplan: um 13:10 läuft „Schlafen“", async () => page.locator(".punkt.jetzt b").allTextContents(), ["Schlafen"]);
+  await eq("Tagesplan: Vergangenes ist blass", async () => page.locator(".punkt.vorbei").count(), 5);
+  check("Tagesplan: neuer Punkt wird angesagt", await sichtbar(page.getByRole("status").getByText("Jetzt: Schlafen")));
   await page.getByRole("button", { name: "Übersicht" }).click();
   await eq("Zähler Tiere", async () => (await page.locator('[data-test="z-tiere"]').textContent()).trim(), "2 Tiere da");
   await eq("Zähler Erzieher", async () => (await page.locator('[data-test="z-erzieher"]').textContent()).trim(), "1 Erzieher da");
@@ -121,21 +126,47 @@ try {
   check("… ist markiert", await page.locator('.abhol[data-profil="Erpelküken"].spaet').count() === 1);
   await eq("Restzeit bis zur Abholung", async () => page.locator('.abhol[data-profil="Wolli"] small').textContent(), "in 50 Minuten");
   await eq("Erzieher-Zeile krank mehrtägig", async () => page.locator('.zeile[data-profil="Lola"] small').textContent(), "krank bis Mittwoch, 18. November");
+  // Essen und Schlafen
+  const buch = (name) => page.locator(`[data-buch="${name}"]`);
+  const gedrueckt = (name) => buch(name).locator('button[aria-pressed="true"]').evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+  await eq("Tagebuch listet die angemeldeten Tiere", async () => page.locator("[data-buch] > b").allTextContents(), ["Erpelküken", "Wolli"]);
+  await buch("Erpelküken").getByRole("button", { name: "nichts gegessen" }).click();
+  await buch("Erpelküken").getByRole("button", { name: "alles gegessen" }).click();
+  await buch("Erpelküken").getByRole("button", { name: "geschlafen", exact: true }).click();
+  await buch("Wolli").getByRole("button", { name: "kurz geschlafen" }).click();
+  await eq("Tagebuch: eine Angabe je Gruppe, die letzte gilt", () => gedrueckt("Erpelküken"), ["alles gegessen", "geschlafen"]);
+  await buch("Wolli").getByRole("button", { name: "kurz geschlafen" }).click();
+  await eq("Tagebuch: noch einmal antippen nimmt zurück", () => gedrueckt("Wolli"), []);
+  await buch("Wolli").getByRole("button", { name: "ein bisschen gegessen" }).click();
+  await page.waitForTimeout(200);
   await shot("05-uebersicht");
   await page.locator('.abhol[data-profil="Erpelküken"]').getByRole("button", { name: "Abholen" }).click();
+  check("Abholen fragt, wer abholt", await sichtbar(dlg.getByText("Wer holt Erpelküken ab?")));
+  await eq("… und zeigt den Tagesbericht", async () => (await dlg.locator('[data-test="bericht"] > span').allTextContents()).map((t) => t.trim()), ["🏫 da seit 08:12", "😋 alles gegessen", "😴 geschlafen"]);
+  await eq("Auswahl der Abholer", async () => dlg.locator(".wer-knopf b").allTextContents(), ["Mama", "Papa", "Oma", "Opa", "Geschwister", "Jemand anderes"]);
+  await page.waitForTimeout(300);
+  await shot("05b-wer-holt-ab");
+  await dlg.locator(".wer-knopf", { hasText: "Mama" }).click();
+  await dlg.waitFor({ state: "hidden" });
   await eq("Abholen aus der Liste checkt aus", async () => page.locator(".abhol .wer b").allTextContents(), ["Wolli"]);
-  await eq("… und steht bei den weiteren Tieren", async () => page.locator('.zeile[data-profil="Erpelküken"] small').textContent(), "gegangen 13:10");
+  await eq("… und steht bei den weiteren Tieren", async () => page.locator('.zeile[data-profil="Erpelküken"] small').textContent(), "gegangen 13:10 mit Mama");
+  await eq("Abgeholte bleiben im Tagebuch (zum Nachtragen)", async () => page.locator("[data-buch] > b").allTextContents(), ["Erpelküken", "Wolli"]);
   await page.getByRole("button", { name: "Zurück" }).click();
   await eq("Schon zu Hause", async () => namen("abgeholt"), ["Erpelküken"]);
 
   // ---------- Abholen im Fenster, zurücknehmen ----------
   await kachel("Erpelküken").click();
+  await eq("Fenster zeigt, wer abgeholt hat", async () => (await dlg.locator('[data-test="gegangen"]').textContent()).replace(/\s+/g, " ").trim(), "gegangen um 13:10 Uhr mit 👩 Mama");
   await dlg.getByRole("button", { name: "Wieder da" }).click();
   check("Wieder da zeigt den Abholen-Knopf", await sichtbar(dlg.getByRole("button", { name: "Abholen" })));
   check("… und die überschrittene Zeit", await sichtbar(dlg.locator(".spaet")));
   await page.waitForTimeout(300);
   await shot("06-abholen");
   await dlg.getByRole("button", { name: "Abholen" }).click();
+  await dlg.getByRole("button", { name: "Doch nicht" }).click();
+  check("„Doch nicht“ führt zurück, ohne auszuchecken", await sichtbar(dlg.getByRole("button", { name: "Abholen" })));
+  await dlg.getByRole("button", { name: "Abholen" }).click();
+  await dlg.locator(".wer-knopf", { hasText: "Oma" }).click();
   await dlg.waitFor({ state: "hidden" });
   await eq("Wieder abgeholt", async () => namen("abgeholt"), ["Erpelküken"]);
 
@@ -336,12 +367,31 @@ try {
   await page.locator("table").waitFor();
   const zeilen = await page.locator("tbody tr").allTextContents();
   check("Protokoll von heute", zeilen.some((z) => /Wolli\s*da\s*08:12\s*14:00/.test(z.replace(/\s+/g, " "))) && zeilen.some((z) => z.includes("Erpelküken") && z.includes("13:10")), zeilen.join(" | "));
+  const kuekenZeile = (await page.locator("tbody tr", { hasText: "Erpelküken" }).textContent()).replace(/\s+/g, " ");
+  check("Protokoll: Abholer, Essen und Schlaf", ["Oma", "alles gegessen", "geschlafen"].every((t) => kuekenZeile.includes(t)), kuekenZeile);
+  await eq("Protokoll: mit dem Anhänger abgeholt steht ohne Abholer", async () => (await page.locator("tbody tr", { hasText: "Scheepi" }).locator("td").allTextContents()).slice(5), ["–", "–", "–"]);
   await shot("09-protokoll");
   await page.getByRole("button", { name: "Einstellungen" }).click();
   await page.getByLabel("Tagesmoment 1").fill("vor dem Mittag");
   await page.getByLabel("Tagesmoment 1").blur();
+  await page.getByLabel("Plan Punkt 1", { exact: true }).fill("Guten Morgen");
+  await page.getByLabel("Plan Punkt 1", { exact: true }).blur();
+  await page.getByRole("button", { name: "Plan Punkt 9 entfernen" }).click();
+  await page.getByLabel("Abholer 6", { exact: true }).fill("Tante Trude");
+  await page.getByLabel("Abholer 6", { exact: true }).blur();
+  await page.locator("#s-aktion").selectOption({ label: "🎃 Kürbisfest" });
+  await eq("Aktion setzt das Farbschema", async () => page.evaluate(() => document.documentElement.dataset.aktion), "kuerbisfest");
+  check("Aktion wird beschrieben", (await page.locator('[data-test="aktion-text"]').textContent()).includes("Kürbishut"));
   await shot("10-einstellungen");
   await page.getByRole("button", { name: "Schließen" }).click();
+  await eq("Geänderter Tagesplan auf der Startseite", async () => [await page.locator(".punkt b").first().textContent(), await page.locator(".plan .punkt").count()], ["Guten Morgen", 8]);
+  await eq("Startseite nennt die Aktion", async () => (await page.locator('[data-test="aktion"]').textContent()).trim(), "🎃 Heute ist Kürbisfest!");
+  check("Schafe tragen den Kürbishut", await page.locator('.brand svg ellipse[fill="#ef7a1a"]').count() === 1);
+  await kachel("Wolli").click();
+  await dlg.getByRole("button", { name: "Abholen" }).click();
+  check("Geänderte Abholer-Auswahl", await sichtbar(dlg.locator(".wer-knopf", { hasText: "Tante Trude" })));
+  await dlg.getByRole("button", { name: "Doch nicht" }).click();
+  await dlg.getByRole("button", { name: "Zurück" }).click();
   await kachel("Flocke").click();
   check("Geänderter Zeitknopf erscheint im Fenster", await sichtbar(dlg.getByText("vor dem Mittag")));
   await eq("Neues Profil nutzt seine übliche Zeit", async () => dlg.locator('[data-test="zeit"]').textContent(), "13:00 Uhr");
@@ -371,6 +421,29 @@ try {
   await dlg.getByRole("button", { name: "Anmelden" }).click();
   await dlg.waitFor({ state: "hidden" });
   await shot("12-handy-terminal");
+
+  // ---------- Aktionen ----------
+  await page.setViewportSize({ width: 1366, height: 768 });
+  for (const [label, id, text] of [["🎪 Sommerfest", "sommerfest", "Heute ist Sommerfest!"], ["🎃 Kürbisfest", "kuerbisfest", "Heute ist Kürbisfest!"], ["🎄 Weihnachtsmarkt", "weihnachtsmarkt", "Heute ist Weihnachtsmarkt!"]]) {
+    await page.keyboard.press("Control+,");
+    await page.locator(".buero").getByRole("button", { name: "Einstellungen" }).click();
+    await page.locator("#s-aktion").selectOption({ label });
+    await page.getByRole("button", { name: "Schließen" }).click();
+    await page.waitForTimeout(200);
+    await shot(`20-${id}-terminal`);
+    await page.reload();
+    await eq(`${id}: Startbild nennt die Aktion`, async () => (await page.locator(".start .aktion").textContent()).replace(/\s+/g, " ").trim().includes(text), true);
+    await eq(`${id}: Farbschema nach Neuladen`, async () => page.evaluate(() => document.documentElement.dataset.aktion), id);
+    await page.waitForTimeout(300);
+    await shot(`21-${id}-start`);
+    await page.getByRole("button", { name: "Kita öffnen" }).click();
+  }
+  await page.keyboard.press("Control+,");
+  await page.locator(".buero").getByRole("button", { name: "Einstellungen" }).click();
+  await page.locator("#s-aktion").selectOption({ label: "Keine Aktion" });
+  await eq("Ohne Aktion: normales Farbschema", async () => page.evaluate(() => document.documentElement.dataset.aktion ?? null), null);
+  await page.getByRole("button", { name: "Schließen" }).click();
+  check("Ohne Aktion: kein Kostüm, kein Banner", await page.locator('[data-test="aktion"]').count() === 0 && await page.locator('.brand svg ellipse[fill="#ef7a1a"]').count() === 0);
 
   check("Keine Fehler in der Konsole", errors.length === 0, errors.join(" | "));
 } catch (err) {

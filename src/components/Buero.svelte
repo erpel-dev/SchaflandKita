@@ -11,6 +11,9 @@
   import { fotoVerkleinern, herunterladen } from "../lib/foto.js";
   import { sag, canSpeak } from "../lib/sprechen.js";
   import { nfc } from "../lib/nfc.svelte.js";
+  import { STANDARD_PLAN, MAX_PUNKTE } from "../lib/tagesplan.js";
+  import { STANDARD_ABHOLER, essenInfo, schlafInfo } from "../lib/tagebuch.js";
+  import { aktionen, aktionById } from "../lib/aktionen.js";
 
   let { onClose, tag = null } = $props();
   let tab = $state("profile");
@@ -161,6 +164,15 @@
     zeiten[i] = { ...zeiten[i], [feld]: wert };
     settings.set({ zeiten });
   }
+  /** Listen in den Einstellungen (Tagesplan, Abholer): Feld ändern, Zeile anhängen, Zeile entfernen */
+  function listeSetzen(name, i, feld, wert) {
+    if (feld === "zeit" && !istZeit(wert)) return;
+    const liste = $state.snapshot(settings.value[name]);
+    liste[i] = { ...liste[i], [feld]: wert };
+    settings.set({ [name]: liste });
+  }
+  const listeNeu = (name, zeile) => settings.set({ [name]: [...$state.snapshot(settings.value[name]), zeile] });
+  const listeWeg = (name, i) => settings.set({ [name]: $state.snapshot(settings.value[name]).filter((_, j) => j !== i) });
   function vollbild() {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen?.().catch(() => {});
@@ -291,11 +303,12 @@
     <div class="karte">
       {#if pZeilen.length}
         <table>
-          <thead><tr><th>Name</th><th>Zustand</th><th>Gekommen</th><th>Abholzeit</th><th>Gegangen</th></tr></thead>
+          <thead><tr><th>Name</th><th>Zustand</th><th>Gekommen</th><th>Abholzeit</th><th>Gegangen</th><th>Abgeholt von</th><th>Essen</th><th>Schlaf</th></tr></thead>
           <tbody>
             {#each pZeilen as z (z.profilId)}
               <tr><td><b>{z.name}</b></td><td>{STATUS_TEXT[z.status]}{z.meldungBis && z.meldungBis > z.datum ? ` (bis ${datumLang(z.meldungBis)})` : ""}</td>
-                <td>{z.gekommenUm ?? "–"}</td><td>{z.abholzeit ?? "–"}</td><td>{z.nichtAbgeholt ? "nicht abgeholt" : (z.gegangenUm ?? "–")}</td></tr>
+                <td>{z.gekommenUm ?? "–"}</td><td>{z.abholzeit ?? "–"}</td><td>{z.nichtAbgeholt ? "nicht abgeholt" : (z.gegangenUm ?? "–")}</td>
+                <td>{z.abgeholtVon ?? "–"}</td><td>{essenInfo(z.gegessen)?.text ?? "–"}</td><td>{schlafInfo(z.geschlafen)?.text ?? "–"}</td></tr>
             {/each}
           </tbody>
         </table>
@@ -369,6 +382,45 @@
           {#each [5, 10, 15, 30] as n (n)}<option value={n}>{n} Minuten</option>{/each}
         </select>
       </div>
+      <h3>Aktion</h3>
+      <div class="reihe"><label for="s-aktion">Besonderer Tag</label>
+        <select id="s-aktion" value={settings.value.aktion ?? ""} onchange={(e) => settings.set({ aktion: e.currentTarget.value || null })}>
+          <option value="">Keine Aktion</option>
+          {#each aktionen as a (a.id)}<option value={a.id}>{a.emoji} {a.name}</option>{/each}
+        </select>
+      </div>
+      {#if aktionById(settings.value.aktion)}<p class="muted" data-test="aktion-text">{aktionById(settings.value.aktion).beschreibung}</p>{/if}
+
+      <h3>Tagesplan</h3>
+      <p class="muted">Bilderleiste oben auf der Startseite; der laufende Punkt ist hervorgehoben. Ohne Punkte gibt es keine Leiste.</p>
+      <div class="reihe"><label for="s-plan-ansage">Neuen Punkt ansagen</label><Toggle id="s-plan-ansage" label="Neuen Punkt ansagen" checked={settings.value.planAnsage} onchange={(v) => settings.set({ planAnsage: v })} /></div>
+      {#each settings.value.tagesplan as z, i (i)}
+        <div class="reihe slot">
+          <input type="time" value={z.zeit} aria-label={`Plan Zeit ${i + 1}`} onchange={(e) => listeSetzen("tagesplan", i, "zeit", e.currentTarget.value)} />
+          <input class="em" value={z.bild} maxlength="8" aria-label={`Plan Bild ${i + 1}`} onchange={(e) => listeSetzen("tagesplan", i, "bild", e.currentTarget.value.trim())} />
+          <input class="txt" value={z.text} maxlength="24" aria-label={`Plan Punkt ${i + 1}`} onchange={(e) => listeSetzen("tagesplan", i, "text", e.currentTarget.value.trim())} />
+          <button class="big-btn light small" aria-label={`Plan Punkt ${i + 1} entfernen`} onclick={() => listeWeg("tagesplan", i)}>✕</button>
+        </div>
+      {/each}
+      <div class="reihe">
+        <button class="big-btn light small" disabled={settings.value.tagesplan.length >= MAX_PUNKTE} onclick={() => listeNeu("tagesplan", { zeit: "11:00", bild: "⭐", text: "Neuer Punkt" })}>+ Punkt</button>
+        <button class="big-btn light small" onclick={() => settings.set({ tagesplan: structuredClone(STANDARD_PLAN) })}>Tagesplan zurücksetzen</button>
+      </div>
+
+      <h3>Wer holt ab?</h3>
+      <div class="reihe"><label for="s-abholer">Beim Abholen fragen</label><Toggle id="s-abholer" label="Beim Abholen fragen" checked={settings.value.abholerFragen} onchange={(v) => settings.set({ abholerFragen: v })} /></div>
+      {#each settings.value.abholer as z, i (i)}
+        <div class="reihe slot">
+          <input class="em" value={z.bild} maxlength="8" aria-label={`Abholer Bild ${i + 1}`} onchange={(e) => listeSetzen("abholer", i, "bild", e.currentTarget.value.trim())} />
+          <input class="txt" value={z.text} maxlength="24" aria-label={`Abholer ${i + 1}`} onchange={(e) => e.currentTarget.value.trim() && listeSetzen("abholer", i, "text", e.currentTarget.value.trim())} />
+          <button class="big-btn light small" aria-label={`Abholer ${i + 1} entfernen`} onclick={() => listeWeg("abholer", i)}>✕</button>
+        </div>
+      {/each}
+      <div class="reihe">
+        <button class="big-btn light small" disabled={settings.value.abholer.length >= 9} onclick={() => listeNeu("abholer", { bild: "🧑", text: "Tante" })}>+ Abholer</button>
+        <button class="big-btn light small" onclick={() => settings.set({ abholer: structuredClone(STANDARD_ABHOLER) })}>Abholer zurücksetzen</button>
+      </div>
+
       <h3>Zeitknöpfe</h3>
       <p class="muted">Die sechs großen Knöpfe im Anmelde-Fenster: Uhrzeit, Bild und Tagesmoment.</p>
       {#each settings.value.zeiten as z, i (i)}
