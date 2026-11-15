@@ -6,6 +6,9 @@
   import Pinnwand from "./components/Pinnwand.svelte";
   import ProfilFenster from "./components/ProfilFenster.svelte";
   import Buero from "./components/Buero.svelte";
+  import NfcZuordnen from "./components/NfcZuordnen.svelte";
+  import { nfc } from "./lib/nfc.svelte.js";
+  import { settings } from "./lib/settings.svelte.js";
   import { kita } from "./lib/kita.svelte.js";
   import { update } from "./lib/update.svelte.js";
   import { unlockAudio, pop } from "./lib/sounds.js";
@@ -14,6 +17,40 @@
   let ansicht = $state("terminal"); // "terminal" | "uebersicht" | "pinnwand"
   let buero = $state(false);
   let gewaehlt = $state(null); // id des Profils, dessen Fenster offen ist
+  let perTag = $state(false); // das Fenster wurde mit einem NFC-Anhänger geöffnet
+  let fenster = $state(null);
+  let neuerTag = $state(null); // Kennung eines unbekannten Anhängers, der gerade zugeordnet wird
+  let bueroTag = $state(null); // { id, n }: im Büro gelesener Anhänger
+  let hinweis = $state("");
+  let hinweisTimer;
+
+  function melde(text) {
+    hinweis = text;
+    clearTimeout(hinweisTimer);
+    hinweisTimer = setTimeout(() => (hinweis = ""), 3500);
+  }
+  function waehle(id, mitTag = false) {
+    perTag = mitTag;
+    gewaehlt = id;
+  }
+
+  // NFC: unbekannter Anhänger → zuordnen; bekannter → Fenster des Profils, noch einmal → bestätigen
+  let tagNr = 0;
+  nfc.onTag = (id) => {
+    if (!gestartet) return;
+    if (buero) return (bueroTag = { id, n: ++tagNr });
+    if (!id) return melde("Dieser Anhänger lässt sich nicht lesen");
+    const profilId = kita.tagProfil(id);
+    if (!profilId) {
+      if (!kita.profile.length) return melde("Noch keine Profile: zuerst im Büro eines anlegen");
+      gewaehlt = null;
+      neuerTag = id;
+      return;
+    }
+    neuerTag = null;
+    if (gewaehlt === profilId && fenster) fenster.bestaetigen();
+    else waehle(profilId, true);
+  };
 
   // Uhr: Abholzeiten, Wartezeiten und der Tageswechsel um Mitternacht hängen daran
   $effect(() => {
@@ -36,11 +73,16 @@
     pop();
     kita.tick();
     gestartet = true;
+    // Aus diesem Antippen heraus darf der Browser nach der NFC-Erlaubnis fragen
+    if (settings.value.nfc) nfc.start(true);
   }
   function onKey(e) {
     // Strg + , öffnet das Büro auch mit der Tastatur
     if (e.ctrlKey && e.key === "," && gestartet) {
       e.preventDefault();
+      gewaehlt = null;
+      neuerTag = null;
+      bueroTag = null;
       buero = true;
     }
   }
@@ -52,23 +94,28 @@
   <StartScreen onOpen={oeffnen} />
 {:else}
   <div class="app">
-    <TopBar {ansicht} onBuero={() => { gewaehlt = null; buero = true; }} onAnsicht={(a) => { pop(); ansicht = a; }} />
+    <TopBar {ansicht} onBuero={() => { gewaehlt = null; neuerTag = null; bueroTag = null; buero = true; }} onAnsicht={(a) => { pop(); ansicht = a; }} />
     {#if ansicht === "uebersicht"}
-      <Uebersicht onSelect={(id) => (gewaehlt = id)} />
+      <Uebersicht onSelect={(id) => waehle(id)} />
     {:else if ansicht === "pinnwand"}
       <Pinnwand />
     {:else}
-      <Terminal onSelect={(id) => (gewaehlt = id)} />
+      <Terminal onSelect={(id) => waehle(id)} />
     {/if}
   </div>
   {#if gewaehlt}
-    {#key gewaehlt}<ProfilFenster id={gewaehlt} onClose={() => (gewaehlt = null)} />{/key}
+    {#key gewaehlt}<ProfilFenster bind:this={fenster} id={gewaehlt} {perTag} onClose={() => (gewaehlt = null)} />{/key}
+  {/if}
+  {#if neuerTag}
+    <NfcZuordnen tag={neuerTag} onDone={(id) => { neuerTag = null; waehle(id, true); }} onClose={() => (neuerTag = null)} />
   {/if}
   {#if buero}
-    <Buero onClose={() => (buero = false)} />
+    <Buero tag={bueroTag} onClose={() => (buero = false)} />
   {/if}
+  {#if hinweis}<div class="hinweis" role="status">{hinweis}</div>{/if}
 {/if}
 
 <style>
   .app { height: 100%; display: flex; flex-direction: column; }
+  .hinweis { position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); z-index: 40; background: var(--ink); color: #fff; padding: 0.7rem 1.2rem; border-radius: 99px; font-weight: 800; box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.3); max-width: 90vw; text-align: center; }
 </style>

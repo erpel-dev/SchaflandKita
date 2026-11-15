@@ -44,6 +44,14 @@ try {
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.clock.install({ time: new Date(2026, 10, 16, 8, 12) }); // Montag, 16.11.2026, 08:12
+  // NFC-Attrappe: window.__nfcHalten("kennung") hält einen Anhänger ans Gerät
+  await page.addInitScript(() => {
+    globalThis.__kitaFakeNfc = { watch: (onTag) => { globalThis.__nfcHalten = (id) => onTag({ id }); return () => (globalThis.__nfcHalten = null); } };
+  });
+  const halten = async (id, pause = true) => {
+    if (pause) await page.clock.fastForward(3000); // Sperre gegen Doppel-Lesen abwarten
+    await page.evaluate((id) => globalThis.__nfcHalten(id), id);
+  };
   await page.goto(URL_APP);
 
   const namen = (bereich) => page.locator(`[data-bereich="${bereich}"] .kachel b`).allTextContents();
@@ -207,6 +215,67 @@ try {
   await eq("Büro zählt die Reaktionen", async () => page.locator("tbody tr td").nth(3).textContent(), "2");
   await page.getByRole("button", { name: "Schließen" }).click();
 
+  // ---------- NFC-Anhänger ----------
+  await halten("04:AA:01");
+  const neuTag = page.getByRole("dialog", { name: "Neuer Anhänger" });
+  check("Unbekannter Anhänger fragt, wem er gehört", await sichtbar(neuTag));
+  await page.waitForTimeout(200);
+  await shot("16-nfc-neu");
+  await neuTag.locator('.kopfknopf[data-profil="Scheepi"]').click();
+  check("Nach dem Zuordnen öffnet sich das Fenster des Profils", await sichtbar(dlg.getByText("Wann wirst du abgeholt?")));
+  await eq("… mit dem Hinweis aufs zweite Hinhalten", async () => (await dlg.locator('[data-test="tagtipp"]').textContent()).trim(), "🏷️ Anhänger noch einmal hinhalten: anmelden");
+  await page.waitForTimeout(200);
+  await shot("17-nfc-fenster");
+  await halten("04:aa:01", false);
+  check("Sofortiges zweites Lesen zählt nicht", await dlg.isVisible() && (await namen("da")).includes("Scheepi") === false);
+  await halten("04:aa:01");
+  await dlg.waitFor({ state: "hidden" });
+  await eq("Noch einmal hinhalten meldet an, mit der üblichen Zeit", async () => (await kachel("Scheepi").locator(".info").textContent()).trim(), "🕒 14:00");
+  await halten("04:aa:01");
+  check("Angemeldet: Anhänger öffnet das Fenster zum Abholen", await sichtbar(dlg.getByRole("button", { name: "Abholen" })));
+  await halten("04:aa:01");
+  await dlg.waitFor({ state: "hidden" });
+  await eq("Noch einmal hinhalten meldet ab", async () => (await namen("abgeholt")).includes("Scheepi"), true);
+  await halten("04:aa:01");
+  check("Abgeholt: Anhänger öffnet nur das Fenster", await sichtbar(dlg.getByRole("button", { name: "Wieder da" })));
+  await halten("04:aa:01");
+  await page.waitForTimeout(300);
+  await eq("… und ändert beim zweiten Hinhalten nichts", async () => (await namen("abgeholt")).includes("Scheepi"), true);
+  await dlg.getByRole("button", { name: "Zurück" }).click();
+  await halten(null);
+  check("Nicht lesbarer Anhänger gibt einen Hinweis", await sichtbar(page.getByRole("status").getByText("lässt sich nicht lesen")));
+
+  await page.keyboard.press("Control+,");
+  await page.locator(".buero").getByRole("button", { name: "NFC" }).click();
+  await eq("Büro: NFC ist bereit", async () => page.locator('[data-test="nfc-status"]').textContent(), "Bereit: Anhänger ans Gerät halten.");
+  const besitzer = (id) => page.locator(`tr[data-tag="${id}"] select`).evaluate((el) => el.selectedOptions[0].textContent);
+  await eq("Büro zeigt die Zuordnung", () => besitzer("04:aa:01"), "Scheepi");
+  await halten("04:bb:02");
+  check("Büro: neuer Anhänger erscheint zum Zuordnen", await sichtbar(page.locator('[data-test="nfc-neu"]')));
+  await page.getByLabel("Neuen Anhänger zuordnen").selectOption({ label: "Wolli" });
+  await eq("Büro: zugeordnet", () => besitzer("04:bb:02"), "Wolli");
+  await halten("04:aa:01");
+  check("Büro: hingehaltener Anhänger wird hervorgehoben", await sichtbar(page.locator('tr.gelesen[data-tag="04:aa:01"]')));
+  await page.getByLabel("Besitzer von 04:aa:01").selectOption({ label: "Erpel" });
+  await eq("Büro: Zuordnung ändern", () => besitzer("04:aa:01"), "Erpel");
+  await page.waitForTimeout(200);
+  await shot("18-nfc-buero");
+  await page.locator('tr[data-tag="04:bb:02"]').getByRole("button", { name: "Aufheben" }).click();
+  await eq("Büro: Zuordnung aufheben", async () => page.locator("tr[data-tag]").count(), 1);
+  check("Im Büro löst der Anhänger keine An- oder Abmeldung aus", await page.getByRole("dialog").count() === 0);
+  await page.getByRole("button", { name: "Schließen" }).click();
+  await halten("04:aa:01");
+  check("Geänderter Anhänger gehört jetzt Erpel", await sichtbar(dlg.getByRole("button", { name: "Feierabend" })) && (await dlg.locator(".name").textContent()) === "Erpel");
+  await dlg.getByRole("button", { name: "Zurück" }).click();
+  await halten("04:bb:02");
+  check("Aufgehobener Anhänger gilt wieder als neu", await sichtbar(neuTag));
+  await neuTag.getByRole("button", { name: "Niemandem" }).click();
+  await page.reload();
+  await page.getByRole("button", { name: "Kita öffnen" }).click();
+  await halten("04:aa:01");
+  check("Nach Neuladen kennt die App den Anhänger noch", await sichtbar(dlg.getByRole("button", { name: "Feierabend" })));
+  await dlg.getByRole("button", { name: "Zurück" }).click();
+
   // ---------- Büro ----------
   const brand = page.locator(".brand");
   await brand.dispatchEvent("pointerdown");
@@ -237,6 +306,7 @@ try {
   await eq("Export-Dateiname", download.suggestedFilename(), "schafland-kita-profile-2026-11-16.json");
   check("Export enthält acht Profile im Kita-Format", exp.format === "schafland-kita" && exp.version === 1 && exp.profile.length === 8);
   const flocke = exp.profile.find((p) => p.name === "Flocke");
+  check("Export enthält die NFC-Anhänger", JSON.stringify(exp.tags) === JSON.stringify([{ id: "04:aa:01", profilId: "beispiel-erpel" }]), JSON.stringify(exp.tags));
   check("Export enthält das Foto", flocke?.bild.art === "foto" && flocke.bild.wert.startsWith("data:image/jpeg;base64,"));
 
   await page.getByRole("button", { name: "Löschen", exact: true }).click();

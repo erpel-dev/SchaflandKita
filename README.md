@@ -15,6 +15,7 @@ Spiel-Terminal für den Kuscheltier-Kindergarten, gedacht für Kinder von 4 bis 
 | Krank / nicht da | Kachel antippen → „Krank“ oder „Nicht da“ → nur heute oder mit Plus bis zu 14 weitere Tage → melden |
 | Zurücknehmen | Kachel antippen → „Wieder gesund“, „Doch da“, „Wieder da“ oder „Doch noch nicht da“ |
 | Pinnwand | Knopf oben rechts: Erzieher schreiben Nachrichten für alle („Nachricht schreiben“ → wer schreibt → Text, auf Wunsch ein großes Bild). Jeder reagiert mit einem Bildchen: Bildchen antippen → „Wer bist du?“ → eigenes Profil antippen. Noch einmal dasselbe nimmt die Reaktion zurück. Die Zahl am Knopf zeigt neue Nachrichten |
+| NFC-Anhänger | Neuen Anhänger ans Gerät halten → „Wem gehört er?“ → Profil antippen. Danach öffnet der Anhänger das Fenster seines Profils; noch einmal hinhalten meldet an (mit der vorgewählten Zeit) bzw. ab. Geht mit Chrome auf Android-Geräten mit NFC; beim ersten „Kita öffnen“ fragt Chrome einmal nach der Erlaubnis |
 | Übersicht | Knopf oben rechts: Abholliste nach Uhrzeit, überschrittene Zeiten gelb, dazu alle Erzieher |
 | Büro | Zwei Sekunden auf das Schaf oben links drücken (oder Strg + ,) |
 
@@ -23,10 +24,11 @@ Um Mitternacht beginnt ein neuer Tag: Alle stehen wieder auf „Noch nicht da“
 ## Büro
 
 - **Profile:** anlegen, ändern, löschen. Bild ist ein Schaf (fünf Fellfarben), ein Emoji oder ein Foto des Kuscheltiers.
-- **Export:** schreibt alle Profile samt Fotos in `schafland-kita-profile-<Datum>.json`, auf Wunsch mit Protokoll.
+- **Export:** schreibt alle Profile samt Fotos und NFC-Zuordnungen in `schafland-kita-profile-<Datum>.json`, auf Wunsch mit Protokoll.
 - **Import:** zeigt zuerst eine Vorschau (neu, geändert, gleich). „Zusammenführen“ löscht nichts, „Ersetzen“ nimmt nur die Datei. Ungültige Dateien werden abgelehnt, ohne etwas zu ändern.
 - **Protokoll:** Anwesenheit vergangener Tage.
 - **Nachrichten:** Nachrichten der Pinnwand löschen.
+- **NFC:** Lesen ein- und ausschalten, Zuordnungen der Anhänger ändern oder aufheben. Ein im Büro hingehaltener Anhänger wird in der Liste hervorgehoben bzw. zum Zuordnen angeboten.
 - **Einstellungen:** Töne, Ansage („Hallo Wolli!“), Schrittweite, die sechs Zeitknöpfe.
 
 Beim ersten Start gibt es sieben Beispielprofile (`src/lib/beispiele.js`): die Erzieher Erpel, Manfred, Lola und Eichel, die Kinder Wolli, Scheepi und Erpelküken.
@@ -36,7 +38,7 @@ Beim ersten Start gibt es sieben Beispielprofile (`src/lib/beispiele.js`): die E
 ```bash
 npm install
 npm run dev        # Entwicklungsserver
-npm test           # Unit-Tests (Zeitrechnung, Import/Export, Kita-Zustand, Pinnwand)
+npm test           # Unit-Tests (Zeitrechnung, Import/Export, Kita-Zustand, Pinnwand, NFC)
 npm run test:e2e   # baut die App und spielt einen Kita-Tag in Chromium durch
 npm run build      # fertige App in dist/
 ```
@@ -53,6 +55,8 @@ Der Browser-Test braucht einen Chromium für Playwright (`npx playwright install
 | `src/components/Uebersicht.svelte` | Übersicht für Erzieher |
 | `src/components/Pinnwand.svelte` | Nachrichten schreiben und darauf reagieren |
 | `src/lib/nachrichten.js` | Reaktionen und Bilder der Pinnwand |
+| `src/lib/nfc.svelte.js` | NFC-Anhänger lesen (Web NFC) |
+| `src/components/NfcZuordnen.svelte` | Neuen Anhänger einem Profil zuordnen |
 | `src/components/Buero.svelte` | Profile, Protokoll, Einstellungen |
 
 ## Veröffentlichen

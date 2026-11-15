@@ -9,7 +9,7 @@
   import { pop, hallo, tschuess, schade } from "../lib/sounds.js";
   import { sag } from "../lib/sprechen.js";
 
-  let { id, onClose } = $props();
+  let { id, onClose, perTag = false } = $props();
 
   let p = $derived(kita.profil(id));
   let st = $derived(kita.status(id));
@@ -62,6 +62,12 @@
     pop();
     await (st === "abgeholt" ? kita.wiederDa(id) : kita.zuruecknehmen(id));
     zeit = startZeit();
+  }
+  /** Der Anhänger des Profils wurde noch einmal hingehalten: das Naheliegende tun. */
+  export function bestaetigen() {
+    if (schritt !== "haupt") return;
+    if (st === "offen") anmelden();
+    else if (st === "da") abholen();
   }
   function meldung(art) {
     pop();
@@ -121,6 +127,7 @@
             <b data-test="zeit">{zeit} Uhr</b>
             <button class="rund" aria-label="Später" onclick={() => waehle(verschieben(zeit, settings.value.schritt))}>+</button>
           </div>
+          {#if perTag}<p class="tagtipp" data-test="tagtipp"><span class="emoji">🏷️</span> Anhänger noch einmal hinhalten: {st === "offen" ? "anmelden" : kind ? "abholen" : "Feierabend"}</p>{/if}
           <div class="knoepfe">
             {#if st === "offen"}
               <button class="big-btn haupt" onclick={anmelden}><span class="emoji">✅</span> Anmelden</button>
@@ -181,6 +188,7 @@
   .knoepfe .big-btn:not(.haupt) { flex: 1 1 auto; }
   .abholen { font-size: 2rem; padding: 1.1rem; background: var(--sun); color: var(--ink); box-shadow: 0 0.25rem 0 #d9a520; }
   .spaet { margin: -0.3rem 0 0; font-weight: 800; color: #8a6500; text-align: center; }
+  .tagtipp { margin: 0; text-align: center; font-weight: 800; color: var(--grass-dark); background: var(--ok-bg); border-radius: 0.9rem; padding: 0.4rem 0.8rem; }
   .gross-bild { font-size: 7rem; text-align: center; padding: 1rem 0 0; }
   .hinweis { text-align: center; margin: 0; color: var(--ink-soft); font-size: 1.2rem; }
 
