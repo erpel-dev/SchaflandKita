@@ -1,5 +1,7 @@
 <script>
   import Sheep from "./Sheep.svelte";
+  import Deko from "./Deko.svelte";
+  import { settings } from "../lib/settings.svelte.js";
   import { kita } from "../lib/kita.svelte.js";
   import { wochentag } from "../lib/zeit.js";
 
@@ -22,6 +24,7 @@
 </script>
 
 <header>
+  <Deko aktion={settings.value.aktion} />
   <div
     class="brand"
     class:pressing
@@ -71,6 +74,7 @@
     background: radial-gradient(circle at 0.7rem 0, var(--sky) 0.7rem, transparent 0.72rem) 0 0 / 1.4rem 0.7rem repeat-x;
     pointer-events: none;
   }
+  header > :global(:not(.deko)) { position: relative; z-index: 1; }
   .brand { display: flex; align-items: center; gap: 0.6rem; cursor: default; touch-action: none; }
   .brand :global(.logo) { transition: transform 2s linear; }
   .brand.pressing :global(.logo) { transform: rotate(360deg) scale(1.15); }

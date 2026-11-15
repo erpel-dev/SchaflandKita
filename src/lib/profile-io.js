@@ -1,6 +1,7 @@
 // Profile prüfen, exportieren und importieren. Reine Funktionen ohne Datenbank, damit sie
 // sich leicht testen lassen; gespeichert wird in kita.svelte.js.
 import { istZeit, istDatum } from "./zeit.js";
+import { ESSEN, SCHLAF, abholerSauber } from "./tagebuch.js";
 
 export const FORMAT = "schafland-kita";
 export const VERSION = 1;
@@ -50,11 +51,17 @@ export function normalisiereProfil(roh) {
 function normalisiereTag(roh, ids) {
   if (!roh || typeof roh !== "object" || !ids.has(roh.profilId) || !istDatum(roh.datum) || !STATUS.includes(roh.status)) return null;
   const zeit = (z) => (istZeit(z) ? z : null);
+  const wer = abholerSauber({ text: roh.abgeholtVon, bild: roh.abgeholtVonBild });
+  const extra = {};
+  if (wer) Object.assign(extra, { abgeholtVon: wer.text, abgeholtVonBild: wer.bild });
+  if (ESSEN.some((e) => e.id === roh.gegessen)) extra.gegessen = roh.gegessen;
+  if (SCHLAF.some((x) => x.id === roh.geschlafen)) extra.geschlafen = roh.geschlafen;
   return {
     profilId: roh.profilId, datum: roh.datum, status: roh.status,
     gekommenUm: zeit(roh.gekommenUm), abholzeit: zeit(roh.abholzeit), gegangenUm: zeit(roh.gegangenUm),
     meldungBis: istDatum(roh.meldungBis) ? roh.meldungBis : null,
     nichtAbgeholt: roh.nichtAbgeholt === true,
+    ...extra,
   };
 }
 

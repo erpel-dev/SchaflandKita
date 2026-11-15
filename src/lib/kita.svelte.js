@@ -4,6 +4,7 @@ import { datumStr, zeitStr, tageVonBis } from "./zeit.js";
 import { normalisiereProfil, sortiereProfile, zusammenfuehren, neueId } from "./profile-io.js";
 import { REAKTIONEN, BILDER, MAX_TEXT } from "./nachrichten.js";
 import { tagId } from "./nfc.svelte.js";
+import { ESSEN, SCHLAF, abholerSauber } from "./tagebuch.js";
 import { BEISPIELE } from "./beispiele.js";
 
 class Kita {
@@ -80,15 +81,31 @@ class Kita {
     if (this.status(id) !== "da") return;
     return this.#setze(id, { abholzeit });
   }
-  /** Abholen: auschecken. */
-  abholen(id) {
+  /** Abholen: auschecken. von = { text, bild }: wer abholt (freiwillig). */
+  abholen(id, von = null) {
     if (this.status(id) !== "da") return;
-    return this.#setze(id, { status: "abgeholt", gegangenUm: this.uhrzeit });
+    const wer = abholerSauber(von);
+    return this.#setze(id, { status: "abgeholt", gegangenUm: this.uhrzeit, abgeholtVon: wer?.text ?? null, abgeholtVonBild: wer?.bild ?? null });
+  }
+  /** Tagebuch: gegessen ("alles" | "etwas" | "nichts" | null) und geschlafen ("ja" | "kurz" | "nein" | null). */
+  tagebuch(id, { gegessen, geschlafen } = {}) {
+    const st = this.status(id);
+    if (st !== "da" && st !== "abgeholt") return;
+    const patch = {};
+    if (gegessen !== undefined) {
+      if (gegessen !== null && !ESSEN.some((e) => e.id === gegessen)) throw new Error("Unbekannte Angabe zum Essen");
+      patch.gegessen = gegessen;
+    }
+    if (geschlafen !== undefined) {
+      if (geschlafen !== null && !SCHLAF.some((x) => x.id === geschlafen)) throw new Error("Unbekannte Angabe zum Schlafen");
+      patch.geschlafen = geschlafen;
+    }
+    return this.#setze(id, patch);
   }
   /** Versehentlich abgeholt: wieder anmelden, Abholzeit bleibt. */
   wiederDa(id) {
     if (this.status(id) !== "abgeholt") return;
-    return this.#setze(id, { status: "da", gegangenUm: null });
+    return this.#setze(id, { status: "da", gegangenUm: null, abgeholtVon: null, abgeholtVonBild: null });
   }
 
   /** Krank oder abwesend melden, heute oder bis einschließlich "bis". */

@@ -3,6 +3,19 @@
   import Avatar from "./Avatar.svelte";
   import { kita } from "../lib/kita.svelte.js";
   import { warteInfo } from "../lib/zeit.js";
+  import { settings } from "../lib/settings.svelte.js";
+  import { sortierePlan, planStand, planSatz } from "../lib/tagesplan.js";
+  import { aktionById } from "../lib/aktionen.js";
+  import { pop } from "../lib/sounds.js";
+  import { sag } from "../lib/sprechen.js";
+
+  let plan = $derived(sortierePlan(settings.value.tagesplan));
+  let stand = $derived(planStand(plan, kita.uhrzeit));
+  let aktion = $derived(aktionById(settings.value.aktion));
+  function planTipp(i) {
+    pop();
+    sag(planSatz(plan, i, kita.uhrzeit), { immer: true });
+  }
 
   let { onSelect } = $props();
 
@@ -24,6 +37,18 @@
 </script>
 
 <main>
+  {#if aktion}<p class="aktion" data-test="aktion"><span class="emoji">{aktion.emoji}</span> {aktion.startText}</p>{/if}
+  {#if plan.length}
+    <nav class="plan" aria-label="Tagesplan">
+      {#each plan as punkt, i (punkt.zeit + punkt.text)}
+        <button class="punkt" class:jetzt={i === stand} class:vorbei={i < stand} aria-current={i === stand ? "time" : undefined} onclick={() => planTipp(i)}>
+          <span class="emoji">{punkt.bild}</span>
+          <b>{punkt.text}</b>
+          <small>{punkt.zeit}</small>
+        </button>
+      {/each}
+    </nav>
+  {/if}
   {#each bereiche as b (b.id)}
     <section data-bereich={b.id}>
       <h2><span class="emoji">{b.bild}</span> {b.titel}</h2>
@@ -59,6 +84,16 @@
 
 <style>
   main { flex: 1; overflow-y: auto; padding: 1.6rem 1.2rem 2rem; display: flex; flex-direction: column; gap: 1.2rem; }
+  .aktion { margin: 0; text-align: center; font-family: var(--f-display); font-weight: 800; font-size: 1.5rem; color: var(--grass-dark); }
+  .plan { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.2rem 0.1rem 0.5rem; flex: none; scrollbar-width: none; }
+  .plan::-webkit-scrollbar { display: none; }
+  .punkt { flex: 1 0 5.6rem; display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.45rem 0.3rem; border-radius: 1rem; background: #fff; border: 3px solid var(--wool-line); }
+  .punkt .emoji { font-size: 1.9rem; }
+  .punkt b { font-family: var(--f-display); font-weight: 700; font-size: 0.95rem; line-height: 1.1; white-space: nowrap; }
+  .punkt small { font-size: 0.85rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .punkt.vorbei { opacity: 0.5; }
+  .punkt.jetzt { border-color: var(--sun); background: #fff8e1; box-shadow: 0 0.25rem 0 #d9a520; transform: translateY(-0.15rem); }
+  .punkt.jetzt .emoji { font-size: 2.3rem; }
   h2 { margin: 0 0 0.6rem; font-family: var(--f-display); font-weight: 800; font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
   .raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.2rem, 1fr)); gap: 0.9rem; }
   .kachel {
@@ -71,8 +106,8 @@
   .kachel b { font-family: var(--f-display); font-weight: 800; font-size: 1.35rem; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .info { font-weight: 800; font-size: 1.05rem; color: var(--ink-soft); min-height: 1.4rem; font-variant-numeric: tabular-nums; }
   .rolle { position: absolute; top: 0.4rem; right: 0.5rem; font-size: 1.3rem; }
-  .kachel.da { border-color: var(--grass); box-shadow: 0 0.3rem 0 var(--grass-dark); background: var(--ok-bg); }
-  .kachel.da .info { color: var(--grass-dark); }
+  .kachel.da { border-color: var(--da); box-shadow: 0 0.3rem 0 var(--da-dark); background: var(--da-bg); }
+  .kachel.da .info { color: var(--da-dark); }
   .kachel.da.spaet { border-color: var(--sun); box-shadow: 0 0.3rem 0 #d9a520; background: #fff8e1; }
   .kachel.da.spaet .info { color: #8a6500; }
   .kachel.da.spaet .info .emoji { display: inline-block; animation: wackeln 1s ease-in-out infinite; }

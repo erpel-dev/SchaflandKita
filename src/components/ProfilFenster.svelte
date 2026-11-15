@@ -8,8 +8,9 @@
   import { verschieben, datumPlus, datumLang, warteInfo } from "../lib/zeit.js";
   import { pop, hallo, tschuess, schade } from "../lib/sounds.js";
   import { sag } from "../lib/sprechen.js";
+  import { tagesbericht } from "../lib/tagebuch.js";
 
-  let { id, onClose, perTag = false } = $props();
+  let { id, onClose, perTag = false, start = "" } = $props();
 
   let p = $derived(kita.profil(id));
   let st = $derived(kita.status(id));
@@ -26,7 +27,10 @@
     return liste.find((z) => z > kita.uhrzeit) ?? liste.at(-1) ?? "15:00";
   }
   let zeit = $state(startZeit());
-  let schritt = $state("haupt"); // "haupt" | "krank" | "abwesend"
+  let abholer = $derived(settings.value.abholerFragen ? settings.value.abholer : []);
+  // "haupt" | "krank" | "abwesend" | "wer" (Wer holt ab?)
+  let schritt = $state(start === "abholen" && kita.status(id) === "da" && kita.profil(id)?.rolle === "kind" && settings.value.abholerFragen && settings.value.abholer.length ? "wer" : "haupt");
+  let bericht = $derived(tagesbericht(e));
   let tage = $state(0); // Meldung gilt heute + so viele weitere Tage
   let spaet = $derived(st === "da" && e?.abholzeit ? warteInfo(e.abholzeit, kita.uhrzeit) : null);
 
@@ -46,10 +50,17 @@
     sag(kind ? `Viel Spaß, ${p.name}!` : `Guten Morgen, ${p.name}!`);
     onClose();
   }
-  async function abholen() {
-    await kita.abholen(id);
+  /** „Abholen“ angetippt: bei Tieren erst fragen, wer abholt. */
+  function abholenTipp() {
+    if (kind && abholer.length) {
+      pop();
+      schritt = "wer";
+    } else abholen();
+  }
+  async function abholen(von = null) {
+    await kita.abholen(id, von);
     tschuess();
-    sag(kind ? `Tschüss ${p.name}! Bis bald!` : `Schönen Feierabend, ${p.name}!`);
+    sag(!kind ? `Schönen Feierabend, ${p.name}!` : von ? `Tschüss ${p.name}! ${von.text} ist da!` : `Tschüss ${p.name}! Bis bald!`);
     onClose();
   }
   async function melden() {
@@ -65,7 +76,7 @@
   }
   /** Der Anhänger des Profils wurde noch einmal hingehalten: das Naheliegende tun. */
   export function bestaetigen() {
-    if (schritt !== "haupt") return;
+    if (schritt === "krank" || schritt === "abwesend") return;
     if (st === "offen") anmelden();
     else if (st === "da") abholen();
   }
@@ -93,7 +104,21 @@
       </aside>
 
       <div class="was">
-        {#if schritt !== "haupt"}
+        {#if schritt === "wer"}
+          <h3><span class="emoji">👋</span> Wer holt {p.name} ab?</h3>
+          {#if bericht.length}
+            <div class="bericht" data-test="bericht">{#each bericht as b (b.text)}<span><span class="emoji">{b.bild}</span> {b.text}</span>{/each}</div>
+          {/if}
+          <div class="abholer">
+            {#each abholer as a (a.text)}
+              <button class="wer-knopf" onclick={() => abholen($state.snapshot(a))}><span class="emoji">{a.bild}</span><b>{a.text}</b></button>
+            {/each}
+          </div>
+          <div class="knoepfe">
+            <button class="big-btn light" onclick={() => abholen()}>Ohne Angabe</button>
+            <button class="big-btn light" onclick={() => (schritt = "haupt")}>Doch nicht</button>
+          </div>
+        {:else if schritt !== "haupt"}
           <h3><span class="emoji">{schritt === "krank" ? "🤒" : "🏖️"}</span> {schritt === "krank" ? "Wie lange krank?" : "Wie lange nicht da?"}</h3>
           <div class="fein gross">
             <button class="rund" aria-label="Einen Tag kürzer" disabled={tage === 0} onclick={() => { tage -= 1; pop(); }}>−</button>
@@ -106,7 +131,7 @@
           </div>
         {:else if st === "offen" || st === "da"}
           {#if st === "da"}
-            <button class="big-btn abholen" onclick={abholen}><span class="emoji">👋</span> {kind ? "Abholen" : "Feierabend"}</button>
+            <button class="big-btn abholen" onclick={abholenTipp}><span class="emoji">👋</span> {kind ? "Abholen" : "Feierabend"}</button>
             {#if spaet?.ueberfaellig}<p class="spaet"><span class="emoji">⏰</span> {kind ? "wartet" : "überfällig"} seit {spaet.text.replace("wartet seit ", "")}</p>{/if}
             <h3>{kind ? "Abholzeit ändern" : "Dienstende ändern"}</h3>
           {:else}
@@ -139,7 +164,10 @@
           </div>
         {:else}
           <div class="gross-bild emoji">{st === "krank" ? "🤒" : st === "abwesend" ? "🏖️" : "🏠"}</div>
-          {#if st === "abgeholt"}<p class="hinweis">{e.nichtAbgeholt ? "nicht abgeholt" : `gegangen um ${e.gegangenUm} Uhr`}</p>{/if}
+          {#if st === "abgeholt"}
+            <p class="hinweis" data-test="gegangen">{e.nichtAbgeholt ? "nicht abgeholt" : `gegangen um ${e.gegangenUm} Uhr`}{#if e.abgeholtVon}&nbsp;mit <span class="emoji">{e.abgeholtVonBild}</span> {e.abgeholtVon}{/if}</p>
+            {#if bericht.length}<div class="bericht">{#each bericht as b (b.text)}<span><span class="emoji">{b.bild}</span> {b.text}</span>{/each}</div>{/if}
+          {/if}
           <div class="knoepfe">
             <button class="big-btn haupt" onclick={zurueck}>
               {st === "krank" ? "Wieder gesund" : st === "abwesend" ? "Doch da" : "Wieder da"}
@@ -189,6 +217,13 @@
   .abholen { font-size: 2rem; padding: 1.1rem; background: var(--sun); color: var(--ink); box-shadow: 0 0.25rem 0 #d9a520; }
   .spaet { margin: -0.3rem 0 0; font-weight: 800; color: #8a6500; text-align: center; }
   .tagtipp { margin: 0; text-align: center; font-weight: 800; color: var(--grass-dark); background: var(--ok-bg); border-radius: 0.9rem; padding: 0.4rem 0.8rem; }
+  .bericht { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+  .bericht > span { background: #fff; border: 2px solid var(--wool-line); border-radius: 99px; padding: 0.3rem 0.8rem; font-weight: 700; }
+  .abholer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
+  .wer-knopf { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.7rem 0.4rem; border-radius: 1.1rem; background: #fff; border: 3px solid var(--wool-line); box-shadow: 0 0.25rem 0 var(--wool-line); }
+  .wer-knopf:active { transform: translateY(0.15rem); }
+  .wer-knopf .emoji { font-size: 2.8rem; }
+  .wer-knopf b { font-family: var(--f-display); font-weight: 800; font-size: 1.15rem; line-height: 1.1; text-align: center; }
   .gross-bild { font-size: 7rem; text-align: center; padding: 1rem 0 0; }
   .hinweis { text-align: center; margin: 0; color: var(--ink-soft); font-size: 1.2rem; }
 
@@ -200,7 +235,8 @@
     .name { font-size: 1.8rem; }
     .zu { width: auto; margin: 0 0 0 auto; padding: 0.5rem 0.8rem; font-size: 1.1rem; }
     .was { padding: 0.9rem; }
-    .zeiten { grid-template-columns: repeat(2, 1fr); }
+    .zeiten, .abholer { grid-template-columns: repeat(2, 1fr); }
+    .wer-knopf .emoji { font-size: 2.2rem; }
     h3 { font-size: 1.4rem; }
     .fein.gross b { min-width: 0; flex: 1; font-size: 1.2rem; }
   }
