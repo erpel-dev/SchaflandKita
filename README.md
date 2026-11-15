@@ -2,6 +2,8 @@
 
 > Hier bin ich Schaf, hier darf ich spielen
 
+**Sofort ausprobieren:** https://erpel-dev.github.io/SchaflandKita/ – läuft im Browser (Chrome, Edge, Safari, Firefox) und lässt sich als App installieren: Chrome/Edge → „App installieren“, iPhone/iPad → Teilen → „Zum Home-Bildschirm“. Danach geht alles auch offline. Profile und Anwesenheit bleiben nur auf dem jeweiligen Gerät.
+
 Spiel-Terminal für den Kuscheltier-Kindergarten, gedacht für Kinder von 4 bis 6 Jahren. Tiere und Erzieher werden morgens mit Abholzeit angemeldet, später abgeholt (ausgecheckt) oder krank bzw. abwesend gemeldet. Technik und Aussehen stammen von der [Schafland-Kasse](https://github.com/erpel-dev/Schafland): Svelte 5, Vite, PWA, Daten in der IndexedDB des Browsers. Es gibt keinen Server; alles bleibt auf dem einen Gerät.
 
 ## Bedienung
