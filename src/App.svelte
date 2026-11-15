@@ -3,6 +3,7 @@
   import TopBar from "./components/TopBar.svelte";
   import Terminal from "./components/Terminal.svelte";
   import Uebersicht from "./components/Uebersicht.svelte";
+  import Pinnwand from "./components/Pinnwand.svelte";
   import ProfilFenster from "./components/ProfilFenster.svelte";
   import Buero from "./components/Buero.svelte";
   import { kita } from "./lib/kita.svelte.js";
@@ -10,7 +11,7 @@
   import { unlockAudio, pop } from "./lib/sounds.js";
 
   let gestartet = $state(false);
-  let ansicht = $state("terminal"); // "terminal" | "uebersicht"
+  let ansicht = $state("terminal"); // "terminal" | "uebersicht" | "pinnwand"
   let buero = $state(false);
   let gewaehlt = $state(null); // id des Profils, dessen Fenster offen ist
 
@@ -51,9 +52,11 @@
   <StartScreen onOpen={oeffnen} />
 {:else}
   <div class="app">
-    <TopBar {ansicht} onBuero={() => { gewaehlt = null; buero = true; }} onUebersicht={() => { pop(); ansicht = "uebersicht"; }} onZurueck={() => { pop(); ansicht = "terminal"; }} />
+    <TopBar {ansicht} onBuero={() => { gewaehlt = null; buero = true; }} onAnsicht={(a) => { pop(); ansicht = a; }} />
     {#if ansicht === "uebersicht"}
       <Uebersicht onSelect={(id) => (gewaehlt = id)} />
+    {:else if ansicht === "pinnwand"}
+      <Pinnwand />
     {:else}
       <Terminal onSelect={(id) => (gewaehlt = id)} />
     {/if}

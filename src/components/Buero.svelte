@@ -7,7 +7,7 @@
   import { settings, STANDARD_ZEITEN } from "../lib/settings.svelte.js";
   import { update } from "../lib/update.svelte.js";
   import { FARBEN, WOLLE, exportDaten, pruefeImport, vorschau } from "../lib/profile-io.js";
-  import { datumPlus, datumLang, istZeit } from "../lib/zeit.js";
+  import { datumPlus, datumLang, istZeit, zeitpunktText } from "../lib/zeit.js";
   import { fotoVerkleinern, herunterladen } from "../lib/foto.js";
   import { sag, canSpeak } from "../lib/sprechen.js";
 
@@ -105,6 +105,14 @@
     });
   });
 
+  // ---------- Nachrichten ----------
+  let nLoeschFrage = $state(null); // id der Nachricht, bei der schon einmal „Löschen“ gedrückt wurde
+  async function nachrichtLoeschen(id) {
+    if (nLoeschFrage !== id) return (nLoeschFrage = id);
+    await kita.nachrichtLoeschen(id);
+    nLoeschFrage = null;
+  }
+
   // ---------- Einstellungen ----------
   function zeitSetzen(i, feld, wert) {
     if (feld === "zeit" && !istZeit(wert)) return;
@@ -123,7 +131,7 @@
     <Sheep size="2.6rem" />
     <div><b>Büro</b><small>Version {__APP_VERSION__}</small></div>
     <nav>
-      {#each [["profile", "Profile"], ["protokoll", "Protokoll"], ["einstellungen", "Einstellungen"]] as [id, name] (id)}
+      {#each [["profile", "Profile"], ["protokoll", "Protokoll"], ["nachrichten", "Nachrichten"], ["einstellungen", "Einstellungen"]] as [id, name] (id)}
         <button class:an={tab === id} onclick={() => (tab = id)}>{name}</button>
       {/each}
     </nav>
@@ -251,6 +259,24 @@
         </table>
       {:else}
         <p class="hinweis">An diesem Tag gibt es keine Einträge.</p>
+      {/if}
+    </div>
+  {:else if tab === "nachrichten"}
+    <div class="leiste"><span class="muted">Nachrichten der Pinnwand. Geschrieben und beantwortet wird auf der Pinnwand selbst; hier lassen sie sich löschen.</span></div>
+    <div class="karte">
+      {#if kita.nachrichten.length}
+        <table>
+          <thead><tr><th>Wann</th><th>Von</th><th>Nachricht</th><th>Reaktionen</th><th></th></tr></thead>
+          <tbody>
+            {#each kita.nachrichten as n (n.id)}
+              <tr><td>{zeitpunktText(n.erstelltAm, kita.datum)}</td><td><b>{kita.profil(n.autorId)?.name ?? n.autorName}</b></td><td>{n.bild} {n.text}</td>
+                <td>{Object.keys(n.reaktionen).filter((id) => kita.profil(id)).length}</td>
+                <td><button class="big-btn rot small" onclick={() => nachrichtLoeschen(n.id)}>{nLoeschFrage === n.id ? "Wirklich löschen?" : "Löschen"}</button></td></tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else}
+        <p class="hinweis">Noch keine Nachrichten.</p>
       {/if}
     </div>
   {:else}
