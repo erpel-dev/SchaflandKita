@@ -3,7 +3,7 @@
   import { kita } from "../lib/kita.svelte.js";
   import { wochentag } from "../lib/zeit.js";
 
-  let { ansicht, onBuero, onUebersicht, onZurueck } = $props();
+  let { ansicht, onBuero, onAnsicht } = $props();
 
   // 2 Sekunden auf das Schaf drücken öffnet das Büro (wie der Eltern-Bereich der Schafland-Kasse)
   let pressTimer;
@@ -44,10 +44,17 @@
   <div class="spacer"></div>
 
   <div class="uhr" aria-label="Uhrzeit"><span class="tag">{wochentag(kita.datum)}</span> <span class="zeit">{kita.uhrzeit}</span></div>
-  {#if ansicht === "uebersicht"}
-    <button class="pille" onclick={onZurueck}><span class="emoji">🏠</span> <span class="txt">Zurück</span></button>
-  {:else}
-    <button class="pille" onclick={onUebersicht}><span class="emoji">📋</span> <span class="txt">Übersicht</span></button>
+  {#if ansicht !== "terminal"}
+    <button class="pille" onclick={() => onAnsicht("terminal")}><span class="emoji">🏠</span> <span class="txt">Zurück</span></button>
+  {/if}
+  {#if ansicht !== "pinnwand"}
+    <button class="pille" onclick={() => onAnsicht("pinnwand")}>
+      <span class="emoji">📌</span> <span class="txt">Pinnwand</span>
+      {#if kita.ungelesen}<span class="neu" aria-label={`${kita.ungelesen} neue Nachrichten`}>{kita.ungelesen}</span>{/if}
+    </button>
+  {/if}
+  {#if ansicht !== "uebersicht"}
+    <button class="pille" onclick={() => onAnsicht("uebersicht")}><span class="emoji">📋</span> <span class="txt">Übersicht</span></button>
   {/if}
 </header>
 
@@ -78,6 +85,7 @@
     background: #fff; border-radius: 99px; font-family: var(--f-display); font-weight: 800; font-size: 1.2rem;
     box-shadow: 0 0.2rem 0 rgba(0, 0, 0, 0.1);
   }
+  .neu { min-width: 1.6rem; height: 1.6rem; padding: 0 0.35rem; border-radius: 99px; background: var(--danger); color: #fff; font-size: 1rem; display: grid; place-items: center; }
   .pille:active { transform: translateY(0.15rem); box-shadow: none; }
 
   @media (max-width: 760px), (max-height: 500px) {
@@ -85,6 +93,7 @@
     .brand :global(.logo) { width: 2.6rem !important; height: 2.6rem !important; }
     b { font-size: 1.5rem; }
     small, .uhr .tag { display: none; }
+    .pille .txt { display: none; }
     .uhr .zeit { font-size: 1.4rem; }
     .pille { height: 2.5rem; padding: 0 0.7rem; }
   }

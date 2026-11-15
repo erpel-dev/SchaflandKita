@@ -53,3 +53,11 @@ export function warteInfo(abholzeit, jetztZeit) {
   if (diff === 0) return { ueberfaellig: false, minuten: 0, text: "jetzt" };
   return { ueberfaellig: true, minuten: -diff, text: `wartet seit ${dauerText(-diff)}` };
 }
+
+/** Zeitpunkt einer Nachricht in Worten: „heute, 08:12“, „gestern, 15:30“, sonst mit Wochentag und Datum. */
+export function zeitpunktText(iso, heute) {
+  const d = new Date(iso);
+  const tag = datumStr(d);
+  const wann = tag === heute ? "heute" : tag === datumPlus(heute, -1) ? "gestern" : datumLang(tag);
+  return `${wann}, ${zeitStr(d)}`;
+}

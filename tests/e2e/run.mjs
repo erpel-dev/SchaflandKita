@@ -137,6 +137,76 @@ try {
   await eq("Nach Neuladen: im Kindergarten", async () => namen("da"), ["Wolli", "Erpel"]);
   await eq("Nach Neuladen: krank", async () => namen("fehlt"), ["Lola"]);
 
+  // ---------- Pinnwand ----------
+  await page.getByRole("button", { name: "Pinnwand" }).click();
+  check("Pinnwand ist anfangs leer", await sichtbar(page.getByText("Noch keine Nachrichten.")));
+  await page.getByRole("button", { name: "Nachricht schreiben" }).click();
+  const schreib = page.getByRole("dialog", { name: "Nachricht schreiben" });
+  await eq("Nur Erzieher stehen als Verfasser zur Wahl", async () => schreib.locator(".kopfknopf b").allTextContents(), ["Eichel", "Erpel", "Lola", "Manfred"]);
+  check("Ohne Verfasser und Text lässt sich nichts anpinnen", await schreib.getByRole("button", { name: "Anpinnen" }).isDisabled());
+  await schreib.locator(".kopfknopf", { hasText: "Erpel" }).click();
+  await schreib.locator("#n-text").fill("Morgen gehen wir in den Wald. Bitte Matschhosen mitbringen!");
+  await schreib.getByRole("button", { name: "Bild 🌳" }).click();
+  await page.waitForTimeout(200);
+  await shot("13-nachricht-schreiben");
+  await schreib.getByRole("button", { name: "Anpinnen" }).click();
+  await schreib.waitFor({ state: "hidden" });
+  const karte = page.locator("article").first();
+  await eq("Nachricht steht an der Pinnwand", async () => karte.locator("p").textContent(), "Morgen gehen wir in den Wald. Bitte Matschhosen mitbringen!");
+  await eq("… mit Verfasser und Zeitpunkt", async () => (await karte.locator("header").textContent()).replace(/\s+/g, " ").trim().replace(/ 🔊$/, ""), "🦆 Erpel heute, 13:10");
+  await eq("… und Bild", async () => karte.locator(".bild").textContent(), "🌳");
+
+  const reagiere = async (emoji, name) => {
+    await karte.getByRole("button", { name: `Mit ${emoji} reagieren` }).click();
+    const wer = page.getByRole("dialog", { name: "Wer bist du?" });
+    await wer.locator(`.kopfknopf[data-profil="${name}"]`).click();
+    await wer.waitFor({ state: "hidden" });
+  };
+  const wer = (emoji) => karte.getByRole("button", { name: `Mit ${emoji} reagieren` }).locator("[data-wer]").evaluateAll((els) => els.map((e) => e.dataset.wer).sort());
+  await reagiere("❤️", "Wolli");
+  await reagiere("❤️", "Scheepi");
+  await reagiere("👍", "Manfred");
+  await eq("Kinder reagieren", () => wer("❤️"), ["Scheepi", "Wolli"]);
+  await eq("Erzieher reagieren", () => wer("👍"), ["Manfred"]);
+  await page.waitForTimeout(200);
+  await shot("14-pinnwand");
+  await karte.getByRole("button", { name: "Mit 🎉 reagieren" }).click();
+  await page.waitForTimeout(200);
+  await shot("15-wer-bist-du");
+  check("Auswahl zeigt die bisherige Reaktion", (await page.locator('.kopfknopf[data-profil="Wolli"] .schon').textContent()) === "❤️");
+  await page.locator('.kopfknopf[data-profil="Wolli"]').click();
+  await eq("Andere Reaktion ersetzt die alte", () => wer("❤️"), ["Scheepi"]);
+  await eq("… durch die neue", () => wer("🎉"), ["Wolli"]);
+  await reagiere("🎉", "Wolli");
+  await eq("Dieselbe Reaktion noch einmal nimmt sie zurück", () => wer("🎉"), []);
+
+  await page.getByRole("button", { name: "Zurück" }).click();
+  check("Eigene Nachricht zählt nicht als neu", await page.locator(".neu").count() === 0);
+  await page.clock.fastForward("00:02:00"); // 13:12
+  await page.evaluate(async () => {
+    // Zweite Nachricht, während die Pinnwand geschlossen ist
+    const db = await new Promise((ok) => { const r = indexedDB.open("schafland-kita"); r.onsuccess = () => ok(r.result); });
+    const tx = db.transaction("nachrichten", "readwrite");
+    tx.objectStore("nachrichten").put({ id: "test-2", autorId: "beispiel-lola", autorName: "Lola", text: "Heute gibt es Kuchen", bild: "🎂", erstelltAm: new Date().toISOString(), reaktionen: {} });
+    await new Promise((ok) => (tx.oncomplete = ok));
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Kita öffnen" }).click();
+  await eq("Zähler zeigt eine neue Nachricht", async () => page.locator(".neu").textContent(), "1");
+  await page.getByRole("button", { name: "Pinnwand" }).click();
+  await eq("Nach Neuladen: beide Nachrichten, neueste zuerst", async () => page.locator("article p").allTextContents(), ["Heute gibt es Kuchen", "Morgen gehen wir in den Wald. Bitte Matschhosen mitbringen!"]);
+  await eq("Nach Neuladen: Reaktionen bleiben", async () => page.locator("article").nth(1).locator("[data-wer]").evaluateAll((els) => els.map((e) => e.dataset.wer).sort()), ["Manfred", "Scheepi"]);
+  await page.getByRole("button", { name: "Zurück" }).click();
+  check("Nach dem Ansehen ist der Zähler weg", await page.locator(".neu").count() === 0);
+
+  await page.keyboard.press("Control+,");
+  await page.locator(".buero").getByRole("button", { name: "Nachrichten" }).click();
+  await page.locator("tbody tr", { hasText: "Kuchen" }).getByRole("button", { name: "Löschen" }).click();
+  await page.locator("tbody tr", { hasText: "Kuchen" }).getByRole("button", { name: "Wirklich löschen?" }).click();
+  await eq("Büro löscht eine Nachricht nach Rückfrage", async () => page.locator("tbody tr").count(), 1);
+  await eq("Büro zählt die Reaktionen", async () => page.locator("tbody tr td").nth(3).textContent(), "2");
+  await page.getByRole("button", { name: "Schließen" }).click();
+
   // ---------- Büro ----------
   const brand = page.locator(".brand");
   await brand.dispatchEvent("pointerdown");
