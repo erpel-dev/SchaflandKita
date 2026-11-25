@@ -11,7 +11,7 @@ Spiel-Terminal für den Kuscheltier-Kindergarten, gedacht für Kinder von 4 bis 
 | Was | Wie |
 | --- | --- |
 | Anmelden | Kachel antippen → Abholzeit antippen (übliche Zeit ist vorgewählt, Plus/Minus verstellt) → „Anmelden“. |
-| Abholen | Kachel eines angemeldeten Tiers antippen → „Abholen“ gedrückt halten, bis der Knopf voll ist (oder in der Übersicht „Abholen“ antippen) → „Wer holt ab?“: Mama, Papa, Oma … antippen oder „Ohne Angabe“. Dabei steht der Tagesbericht: da seit, gegessen, geschlafen |
+| Abholen | Kachel eines angemeldeten Tiers antippen → „Abholen“ antippen (geht auch direkt in der Übersicht) → „Wer holt ab?“: Mama, Papa, Oma … antippen oder „Ohne Angabe“. Dabei steht der Tagesbericht: da seit, gegessen, geschlafen |
 | Tagesplan | Bilderleiste oben auf der Startseite; der laufende Punkt ist hervorgehoben, und das Schaf sagt an, wenn ein neuer beginnt. Einen Punkt antippen liest vor, wann er dran ist |
 | Essen und Schlafen | In der Übersicht je Tier ein Bildchen antippen (alles / ein bisschen / nichts gegessen, geschlafen / kurz / nicht). Noch einmal antippen nimmt es zurück |
 | Krank / nicht da | Kachel antippen → „Krank“ oder „Nicht da“ → nur heute oder mit Plus bis zu 14 weitere Tage → melden |

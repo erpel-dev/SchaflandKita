@@ -57,46 +57,6 @@
       schritt = "wer";
     } else abholen();
   }
-  // Tiere werden mit Gedrückthalten abgeholt, damit ein Kind nicht aus Versehen abmeldet
-  const HALTE_MS = 1500;
-  let halteEingabe = $state(null), halteTipp = $state(false), halteTimer;
-  function halteStart(eingabe) {
-    if (halteEingabe !== null) return;
-    halteEingabe = eingabe;
-    halteTimer = setTimeout(() => {
-      halteEingabe = null;
-      halteTipp = false;
-      abholenTipp();
-    }, HALTE_MS);
-  }
-  $effect(() => () => clearTimeout(halteTimer));
-  function halteEnde() {
-    if (halteEingabe === null) return;
-    clearTimeout(halteTimer);
-    halteEingabe = null;
-    halteTipp = true;
-  }
-  function halteZeigerStart(ev) {
-    if (ev.isPrimary && ev.button === 0) halteStart(ev.pointerId);
-  }
-  function halteZeigerEnde(ev) {
-    if (ev.pointerId === halteEingabe) halteEnde();
-  }
-  function halteZeigerBewegt(ev) {
-    if (ev.pointerId !== halteEingabe) return;
-    // Touch-Zeiger bleiben beim Wegziehen an das ursprüngliche Element gebunden.
-    const { left, top, right, bottom } = ev.currentTarget.getBoundingClientRect();
-    const { clientX: x, clientY: y } = ev;
-    if (x < left || x >= right || y < top || y >= bottom) halteEnde();
-  }
-  function halteTaste(ev) {
-    if (ev.key !== " " && ev.key !== "Enter") return;
-    ev.preventDefault();
-    if (!ev.repeat) halteStart(ev.key);
-  }
-  function halteTasteLos(ev) {
-    if (ev.key === halteEingabe) halteEnde();
-  }
   async function abholen(von = null) {
     await kita.abholen(id, von);
     tschuess();
@@ -137,7 +97,7 @@
   const LAGE = { offen: "noch nicht da", da: "im Kindergarten", abgeholt: "schon zu Hause", krank: "krank", abwesend: "nicht da" };
 </script>
 
-<svelte:window onkeydown={(ev) => ev.key === "Escape" && onClose()} onblur={halteEnde} />
+<svelte:window onkeydown={(ev) => ev.key === "Escape" && onClose()} />
 
 {#if p}
   <div class="schleier" role="presentation" onclick={(ev) => ev.target === ev.currentTarget && onClose()}>
@@ -199,32 +159,13 @@
             <button class="rund" aria-label="Später" onclick={() => waehle(verschieben(zeit, settings.value.schritt))}>+</button>
           </div>
           {#if perTag}<p class="tagtipp" data-test="tagtipp"><span class="emoji">🏷️</span> Anhänger noch einmal hinhalten: {st === "offen" ? "anmelden" : kind ? "abholen" : "Feierabend"}</p>{/if}
-          {#if halteTipp && st === "da"}<p class="halte-tipp" data-test="halte-tipp"><span class="emoji">✋</span> Zum Abholen den Knopf gedrückt halten</p>{/if}
           <div class="knoepfe">
             {#if st === "offen"}
               <button class="big-btn haupt" onclick={anmelden}><span class="emoji">✅</span> Anmelden</button>
               <button class="big-btn rot" onclick={() => meldung("krank")}><span class="emoji">🤒</span> Krank</button>
               <button class="big-btn light" onclick={() => meldung("abwesend")}><span class="emoji">🏖️</span> Nicht da</button>
             {:else}
-              {#if kind}
-                <button
-                  class="big-btn abholen"
-                  class:haelt={halteEingabe !== null}
-                  style="--halte: {HALTE_MS}ms"
-                  onpointerdown={halteZeigerStart}
-                  onpointermove={halteZeigerBewegt}
-                  onpointerup={halteZeigerEnde}
-                  onpointerleave={halteZeigerEnde}
-                  onpointercancel={halteZeigerEnde}
-                  onlostpointercapture={halteZeigerEnde}
-                  oncontextmenu={(ev) => ev.preventDefault()}
-                  onkeydown={halteTaste}
-                  onkeyup={halteTasteLos}
-                  onblur={halteEnde}
-                ><span class="emoji">👋</span> Abholen <small>gedrückt halten</small></button>
-              {:else}
-                <button class="big-btn abholen" onclick={abholenTipp}><span class="emoji">👋</span> Feierabend</button>
-              {/if}
+              <button class="big-btn abholen" onclick={abholenTipp}><span class="emoji">👋</span> {kind ? "Abholen" : "Feierabend"}</button>
               <button class="big-btn light small" onclick={zurueck}>Doch noch nicht da</button>
             {/if}
           </div>
@@ -280,11 +221,7 @@
   .knoepfe { display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: auto; }
   .knoepfe .haupt { flex: 2 1 12rem; font-size: 1.7rem; padding: 0.9rem 1.2rem; }
   .knoepfe .big-btn:not(.haupt) { flex: 1 1 auto; }
-  .abholen { position: relative; overflow: hidden; font-size: 1.4rem; padding: 0.8rem 1.1rem; background: var(--sun); color: var(--ink); box-shadow: 0 0.25rem 0 #d9a520; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
-  .abholen small { display: block; font-size: 0.75rem; font-weight: 700; opacity: 0.75; }
-  .abholen::before { content: ""; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.55); transform: scaleX(0); transform-origin: left; pointer-events: none; }
-  .abholen.haelt::before { transform: scaleX(1); transition: transform var(--halte) linear; }
-  .halte-tipp { margin: 0; font-weight: 800; color: var(--ink); }
+  .abholen { font-size: 1.4rem; padding: 0.8rem 1.1rem; background: var(--sun); color: var(--ink); box-shadow: 0 0.25rem 0 #d9a520; }
   .spaet { margin: -0.3rem 0 0; font-weight: 800; color: #8a6500; text-align: center; }
   .tagtipp { margin: 0; text-align: center; font-weight: 800; color: var(--grass-dark); background: var(--ok-bg); border-radius: 0.9rem; padding: 0.4rem 0.8rem; }
   .bericht { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
