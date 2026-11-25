@@ -59,25 +59,44 @@
   }
   // Tiere werden mit Gedrückthalten abgeholt, damit ein Kind nicht aus Versehen abmeldet
   const HALTE_MS = 1500;
-  let haelt = $state(false), halteTipp = $state(false), halteTimer;
-  function halteStart() {
-    if (haelt) return;
-    haelt = true;
+  let halteEingabe = $state(null), halteTipp = $state(false), halteTimer;
+  function halteStart(eingabe) {
+    if (halteEingabe !== null) return;
+    halteEingabe = eingabe;
     halteTimer = setTimeout(() => {
-      haelt = false;
+      halteEingabe = null;
       halteTipp = false;
       abholenTipp();
     }, HALTE_MS);
   }
   $effect(() => () => clearTimeout(halteTimer));
   function halteEnde() {
-    if (!haelt) return;
+    if (halteEingabe === null) return;
     clearTimeout(halteTimer);
-    haelt = false;
+    halteEingabe = null;
     halteTipp = true;
   }
-  const halteTaste = (ev) => (ev.key === " " || ev.key === "Enter") && (ev.preventDefault(), ev.repeat || halteStart());
-  const halteTasteLos = (ev) => (ev.key === " " || ev.key === "Enter") && halteEnde();
+  function halteZeigerStart(ev) {
+    if (ev.isPrimary && ev.button === 0) halteStart(ev.pointerId);
+  }
+  function halteZeigerEnde(ev) {
+    if (ev.pointerId === halteEingabe) halteEnde();
+  }
+  function halteZeigerBewegt(ev) {
+    if (ev.pointerId !== halteEingabe) return;
+    // Touch-Zeiger bleiben beim Wegziehen an das ursprüngliche Element gebunden.
+    const { left, top, right, bottom } = ev.currentTarget.getBoundingClientRect();
+    const { clientX: x, clientY: y } = ev;
+    if (x < left || x >= right || y < top || y >= bottom) halteEnde();
+  }
+  function halteTaste(ev) {
+    if (ev.key !== " " && ev.key !== "Enter") return;
+    ev.preventDefault();
+    if (!ev.repeat) halteStart(ev.key);
+  }
+  function halteTasteLos(ev) {
+    if (ev.key === halteEingabe) halteEnde();
+  }
   async function abholen(von = null) {
     await kita.abholen(id, von);
     tschuess();
@@ -118,7 +137,7 @@
   const LAGE = { offen: "noch nicht da", da: "im Kindergarten", abgeholt: "schon zu Hause", krank: "krank", abwesend: "nicht da" };
 </script>
 
-<svelte:window onkeydown={(ev) => ev.key === "Escape" && onClose()} />
+<svelte:window onkeydown={(ev) => ev.key === "Escape" && onClose()} onblur={halteEnde} />
 
 {#if p}
   <div class="schleier" role="presentation" onclick={(ev) => ev.target === ev.currentTarget && onClose()}>
@@ -188,7 +207,21 @@
               <button class="big-btn light" onclick={() => meldung("abwesend")}><span class="emoji">🏖️</span> Nicht da</button>
             {:else}
               {#if kind}
-                <button class="big-btn abholen" class:haelt style="--halte: {HALTE_MS}ms" onpointerdown={halteStart} onpointerup={halteEnde} onpointerleave={halteEnde} onpointercancel={halteEnde} oncontextmenu={(ev) => ev.preventDefault()} onkeydown={halteTaste} onkeyup={halteTasteLos}><span class="emoji">👋</span> Abholen <small>gedrückt halten</small></button>
+                <button
+                  class="big-btn abholen"
+                  class:haelt={halteEingabe !== null}
+                  style="--halte: {HALTE_MS}ms"
+                  onpointerdown={halteZeigerStart}
+                  onpointermove={halteZeigerBewegt}
+                  onpointerup={halteZeigerEnde}
+                  onpointerleave={halteZeigerEnde}
+                  onpointercancel={halteZeigerEnde}
+                  onlostpointercapture={halteZeigerEnde}
+                  oncontextmenu={(ev) => ev.preventDefault()}
+                  onkeydown={halteTaste}
+                  onkeyup={halteTasteLos}
+                  onblur={halteEnde}
+                ><span class="emoji">👋</span> Abholen <small>gedrückt halten</small></button>
               {:else}
                 <button class="big-btn abholen" onclick={abholenTipp}><span class="emoji">👋</span> Feierabend</button>
               {/if}
