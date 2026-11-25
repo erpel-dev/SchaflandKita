@@ -71,6 +71,17 @@ try {
   // ---------- Anmelden ----------
   await kachel("Wolli").click();
   const dlg = page.getByRole("dialog");
+  const abholknopf = dlg.getByRole("button", { name: "Abholen" });
+  // Tiere werden im Fenster mit Gedrückthalten abgeholt
+  const abholenHalten = async () => {
+    await abholknopf.hover();
+    await page.mouse.down();
+    try {
+      await page.clock.runFor(1600);
+    } finally {
+      await page.mouse.up();
+    }
+  };
   check("Fenster fragt nach der Abholzeit", await sichtbar(dlg.getByText("Wann wirst du abgeholt?")));
   await eq("Übliche Abholzeit ist vorgewählt", async () => dlg.locator('[data-test="zeit"]').textContent(), "15:00 Uhr");
   await page.waitForTimeout(300); // Einblend-Animation
@@ -158,14 +169,41 @@ try {
   await kachel("Erpelküken").click();
   await eq("Fenster zeigt, wer abgeholt hat", async () => (await dlg.locator('[data-test="gegangen"]').textContent()).replace(/\s+/g, " ").trim(), "gegangen um 13:10 Uhr mit 👩 Mama");
   await dlg.getByRole("button", { name: "Wieder da" }).click();
-  check("Wieder da zeigt den Abholen-Knopf", await sichtbar(dlg.getByRole("button", { name: "Abholen" })));
+  await dlg.waitFor({ state: "hidden" });
+  check("Wieder da schließt das Fenster", (await namen("da")).includes("Erpelküken"));
+  await kachel("Erpelküken").click();
+  check("Danach zeigt die Kachel den Abholen-Knopf", await sichtbar(abholknopf));
   check("… und die überschrittene Zeit", await sichtbar(dlg.locator(".spaet")));
   await page.waitForTimeout(300);
   await shot("06-abholen");
-  await dlg.getByRole("button", { name: "Abholen" }).click();
+  const abholfrage = dlg.getByText("Wer holt Erpelküken ab?");
+  await abholknopf.click();
+  check("Kurzes Antippen holt nicht ab", await sichtbar(dlg.locator('[data-test="halte-tipp"]')) && !(await abholfrage.isVisible()));
+
+  // Echte Touch-Ereignisse testen das Wegziehen bei impliziter Zeigerbindung.
+  const touch = await ctx.newCDPSession(page);
+  const pos = await abholknopf.boundingBox();
+  const finger = { x: Math.round(pos.x + pos.width / 2), y: Math.round(pos.y + pos.height / 2) };
+  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [finger] });
+  const touchHaelt = await abholknopf.evaluate((knopf) => knopf.classList.contains("haelt"));
+  await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: finger.x, y: Math.round(pos.y - 25) }] });
+  await page.clock.runFor(1600);
+  check("Wegziehen des Fingers bricht das Abholen ab", touchHaelt && await abholknopf.isVisible() && !(await abholfrage.isVisible()));
+  await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await touch.detach();
+
+  await abholknopf.focus();
+  await page.keyboard.down("Space");
+  const tasteHaelt = await abholknopf.evaluate((knopf) => knopf.classList.contains("haelt"));
+  await page.keyboard.press("Tab");
+  await page.keyboard.up("Space");
+  await page.clock.runFor(1600);
+  check("Fokuswechsel bricht das Abholen per Tastatur ab", tasteHaelt && await abholknopf.isVisible() && !(await abholfrage.isVisible()));
+
+  await abholenHalten();
   await dlg.getByRole("button", { name: "Doch nicht" }).click();
-  check("„Doch nicht“ führt zurück, ohne auszuchecken", await sichtbar(dlg.getByRole("button", { name: "Abholen" })));
-  await dlg.getByRole("button", { name: "Abholen" }).click();
+  check("„Doch nicht“ führt zurück, ohne auszuchecken", await sichtbar(abholknopf));
+  await abholenHalten();
   await dlg.locator(".wer-knopf", { hasText: "Oma" }).click();
   await dlg.waitFor({ state: "hidden" });
   await eq("Wieder abgeholt", async () => namen("abgeholt"), ["Erpelküken"]);
@@ -388,7 +426,7 @@ try {
   await eq("Startseite nennt die Aktion", async () => (await page.locator('[data-test="aktion"]').textContent()).trim(), "🎃 Heute ist Kürbisfest!");
   check("Schafe tragen den Kürbishut", await page.locator('.brand svg ellipse[fill="#ef7a1a"]').count() === 1);
   await kachel("Wolli").click();
-  await dlg.getByRole("button", { name: "Abholen" }).click();
+  await abholenHalten();
   check("Geänderte Abholer-Auswahl", await sichtbar(dlg.locator(".wer-knopf", { hasText: "Tante Trude" })));
   await dlg.getByRole("button", { name: "Doch nicht" }).click();
   await dlg.getByRole("button", { name: "Zurück" }).click();

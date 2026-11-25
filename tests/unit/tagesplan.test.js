@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { STANDARD_PLAN, sortierePlan, planStand, planSatz, MAX_PUNKTE } from "../../src/lib/tagesplan.js";
-import { tagesbericht, abholerSauber } from "../../src/lib/tagebuch.js";
+import { tagesbericht, abholerSauber, abholerDa } from "../../src/lib/tagebuch.js";
 import { aktionen, aktionById } from "../../src/lib/aktionen.js";
 import { pruefeImport } from "../../src/lib/profile-io.js";
 import { kita } from "../../src/lib/kita.svelte.js";
@@ -113,4 +113,12 @@ test("Protokoll-Import behält Tagebuch und Abholer, verwirft Unsinn", () => {
   assert.equal(r.ok, true, r.fehler);
   assert.deepEqual([r.tage[0].gegessen, r.tage[0].geschlafen, r.tage[0].abgeholtVon, r.tage[0].abgeholtVonBild], ["alles", "nein", "Oma", "👵"]);
   for (const feld of ["gegessen", "geschlafen", "abgeholtVon"]) assert.equal(feld in r.tage[1], false, feld);
+});
+
+test("Ansage beim Abholen: ist da / sind da", () => {
+  assert.equal(abholerDa("Mama"), "Mama ist da!");
+  assert.equal(abholerDa("Jemand anderes"), "Jemand anderes ist da!");
+  assert.equal(abholerDa("Geschwister"), "Geschwister sind da!");
+  assert.equal(abholerDa(" Eltern "), "Eltern sind da!");
+  assert.equal(abholerDa("Mama und Papa"), "Mama und Papa sind da!");
 });

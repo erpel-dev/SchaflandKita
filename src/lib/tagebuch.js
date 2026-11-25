@@ -27,6 +27,16 @@ export function abholerSauber(von) {
   return text ? { text, bild: String(von.bild ?? "").slice(0, 8) } : null;
 }
 
+// Abholer in der Mehrzahl ("Geschwister sind da", nicht "ist da")
+const MEHRZAHL = new Set(["geschwister", "eltern", "großeltern", "grosseltern", "kinder", "freunde", "tanten"]);
+
+/** "ist da" oder "sind da" für die Ansage beim Abholen. */
+export function abholerDa(text) {
+  const t = String(text ?? "").trim();
+  const mehr = MEHRZAHL.has(t.toLowerCase()) || /\s(und|&|\+)\s/i.test(t);
+  return `${t} ${mehr ? "sind" : "ist"} da!`;
+}
+
 /** Bericht für den Tag eines Tiers: Liste aus { bild, text }. */
 export function tagesbericht(eintrag) {
   if (!eintrag) return [];
