@@ -8,7 +8,7 @@
   import { verschieben, datumPlus, datumLang, warteInfo } from "../lib/zeit.js";
   import { pop, hallo, tschuess, schade } from "../lib/sounds.js";
   import { sag } from "../lib/sprechen.js";
-  import { tagesbericht } from "../lib/tagebuch.js";
+  import { tagesbericht, abholerDa } from "../lib/tagebuch.js";
 
   let { id, onClose, perTag = false, start = "" } = $props();
 
@@ -57,10 +57,31 @@
       schritt = "wer";
     } else abholen();
   }
+  // Tiere werden mit Gedrückthalten abgeholt, damit ein Kind nicht aus Versehen abmeldet
+  const HALTE_MS = 1500;
+  let haelt = $state(false), halteTipp = $state(false), halteTimer;
+  function halteStart() {
+    if (haelt) return;
+    haelt = true;
+    halteTimer = setTimeout(() => {
+      haelt = false;
+      halteTipp = false;
+      abholenTipp();
+    }, HALTE_MS);
+  }
+  $effect(() => () => clearTimeout(halteTimer));
+  function halteEnde() {
+    if (!haelt) return;
+    clearTimeout(halteTimer);
+    haelt = false;
+    halteTipp = true;
+  }
+  const halteTaste = (ev) => (ev.key === " " || ev.key === "Enter") && (ev.preventDefault(), ev.repeat || halteStart());
+  const halteTasteLos = (ev) => (ev.key === " " || ev.key === "Enter") && halteEnde();
   async function abholen(von = null) {
     await kita.abholen(id, von);
     tschuess();
-    sag(!kind ? `Schönen Feierabend, ${p.name}!` : von ? `Tschüss ${p.name}! ${von.text} ist da!` : `Tschüss ${p.name}! Bis bald!`);
+    sag(!kind ? `Schönen Feierabend, ${p.name}!` : von ? `Tschüss ${p.name}! ${abholerDa(von.text)}` : `Tschüss ${p.name}! Bis bald!`);
     onClose();
   }
   async function melden() {
@@ -70,8 +91,15 @@
     onClose();
   }
   async function zurueck() {
+    if (st === "abgeholt") {
+      // Wieder angemeldet: Fenster schließen wie beim Anmelden, nicht gleich „Abholen“ zeigen
+      await kita.wiederDa(id);
+      hallo();
+      sag(`Schön, dass du wieder da bist, ${p.name}!`);
+      return onClose();
+    }
     pop();
-    await (st === "abgeholt" ? kita.wiederDa(id) : kita.zuruecknehmen(id));
+    await kita.zuruecknehmen(id);
     zeit = startZeit();
   }
   /** Der Anhänger des Profils wurde noch einmal hingehalten: das Naheliegende tun. */
@@ -131,7 +159,6 @@
           </div>
         {:else if st === "offen" || st === "da"}
           {#if st === "da"}
-            <button class="big-btn abholen" onclick={abholenTipp}><span class="emoji">👋</span> {kind ? "Abholen" : "Feierabend"}</button>
             {#if spaet?.ueberfaellig}<p class="spaet"><span class="emoji">⏰</span> {kind ? "wartet" : "überfällig"} seit {spaet.text.replace("wartet seit ", "")}</p>{/if}
             <h3>{kind ? "Abholzeit ändern" : "Dienstende ändern"}</h3>
           {:else}
@@ -153,12 +180,18 @@
             <button class="rund" aria-label="Später" onclick={() => waehle(verschieben(zeit, settings.value.schritt))}>+</button>
           </div>
           {#if perTag}<p class="tagtipp" data-test="tagtipp"><span class="emoji">🏷️</span> Anhänger noch einmal hinhalten: {st === "offen" ? "anmelden" : kind ? "abholen" : "Feierabend"}</p>{/if}
+          {#if halteTipp && st === "da"}<p class="halte-tipp" data-test="halte-tipp"><span class="emoji">✋</span> Zum Abholen den Knopf gedrückt halten</p>{/if}
           <div class="knoepfe">
             {#if st === "offen"}
               <button class="big-btn haupt" onclick={anmelden}><span class="emoji">✅</span> Anmelden</button>
               <button class="big-btn rot" onclick={() => meldung("krank")}><span class="emoji">🤒</span> Krank</button>
               <button class="big-btn light" onclick={() => meldung("abwesend")}><span class="emoji">🏖️</span> Nicht da</button>
             {:else}
+              {#if kind}
+                <button class="big-btn abholen" class:haelt style="--halte: {HALTE_MS}ms" onpointerdown={halteStart} onpointerup={halteEnde} onpointerleave={halteEnde} onpointercancel={halteEnde} oncontextmenu={(ev) => ev.preventDefault()} onkeydown={halteTaste} onkeyup={halteTasteLos}><span class="emoji">👋</span> Abholen <small>gedrückt halten</small></button>
+              {:else}
+                <button class="big-btn abholen" onclick={abholenTipp}><span class="emoji">👋</span> Feierabend</button>
+              {/if}
               <button class="big-btn light small" onclick={zurueck}>Doch noch nicht da</button>
             {/if}
           </div>
@@ -214,7 +247,11 @@
   .knoepfe { display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: auto; }
   .knoepfe .haupt { flex: 2 1 12rem; font-size: 1.7rem; padding: 0.9rem 1.2rem; }
   .knoepfe .big-btn:not(.haupt) { flex: 1 1 auto; }
-  .abholen { font-size: 2rem; padding: 1.1rem; background: var(--sun); color: var(--ink); box-shadow: 0 0.25rem 0 #d9a520; }
+  .abholen { position: relative; overflow: hidden; font-size: 1.4rem; padding: 0.8rem 1.1rem; background: var(--sun); color: var(--ink); box-shadow: 0 0.25rem 0 #d9a520; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
+  .abholen small { display: block; font-size: 0.75rem; font-weight: 700; opacity: 0.75; }
+  .abholen::before { content: ""; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.55); transform: scaleX(0); transform-origin: left; pointer-events: none; }
+  .abholen.haelt::before { transform: scaleX(1); transition: transform var(--halte) linear; }
+  .halte-tipp { margin: 0; font-weight: 800; color: var(--ink); }
   .spaet { margin: -0.3rem 0 0; font-weight: 800; color: #8a6500; text-align: center; }
   .tagtipp { margin: 0; text-align: center; font-weight: 800; color: var(--grass-dark); background: var(--ok-bg); border-radius: 0.9rem; padding: 0.4rem 0.8rem; }
   .bericht { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
