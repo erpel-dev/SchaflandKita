@@ -84,6 +84,8 @@ export async function regression(browser, url, check) {
     await a.clock.fastForward(3000);
     await a.evaluate(() => globalThis.__tag("04:aa:01"));
     await dialog(a).locator('[data-test="tagtipp"]').waitFor();
+    await a.evaluate(() => globalThis.__tag(null));
+    await dialog(a).getByRole("status").getByText("Dieser Anhänger lässt sich nicht lesen").waitFor();
     assert.equal(await tile(a).evaluate((el) => el.closest("[data-bereich]").dataset.bereich), "da");
     await a.keyboard.press("Escape");
     await dialog(a).waitFor({ state: "hidden" });
@@ -136,7 +138,7 @@ export async function regression(browser, url, check) {
     const draft = dialog(a, "Nachricht schreiben");
     await draft.locator("#n-text").fill("Entwurf bleibt erhalten");
     await a.evaluate(() => globalThis.__tag("04:bb:02"));
-    await draft.waitFor();
+    await draft.getByRole("status").getByText(/halte den Anhänger noch einmal hin/).waitFor();
     assert.equal(await a.getByRole("dialog", { name: "Neuer Anhänger" }).count(), 0);
     await a.keyboard.press("Control+,");
     await office(a).waitFor();
@@ -168,6 +170,17 @@ export async function regression(browser, url, check) {
     await tile(a, "Import-Test").click();
     await dialog(a, "Import-Test").getByRole("button", { name: "Anmelden" }).waitFor();
     check("Pinnwand-Synchronisierung und Schließen des Profilfensters am Tageswechsel", true);
+    await a.keyboard.press("Escape");
+    await tile(a, "Eichel").click();
+    await b.keyboard.press("Control+,");
+    await b.locator(".liste button").filter({ hasText: "Eichel" }).click();
+    await button(b, "Löschen").click();
+    await button(b, "Wirklich löschen?").click();
+    await b.locator(".liste button").filter({ hasText: "Eichel" }).waitFor({ state: "hidden" });
+    await dialog(a, "Eichel").getByRole("button", { name: "Anmelden" }).click();
+    await dialog(a, "Eichel").waitFor({ state: "hidden" });
+    await a.getByRole("status").getByText(/Das hat sich gerade geändert/).waitFor();
+    check("Sichtbare Rückmeldung, wenn ein anderer Tab das Profil gelöscht hat", true);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

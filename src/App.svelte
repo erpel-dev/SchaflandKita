@@ -15,7 +15,8 @@
   import { untrack } from "svelte";
   import { kita } from "./lib/kita.svelte.js";
   import { update } from "./lib/update.svelte.js";
-  import { unlockAudio, pop, hallo } from "./lib/sounds.js";
+  import { hinweisImVordergrund } from "./lib/modal.js";
+  import { unlockAudio, pop, hallo, schade } from "./lib/sounds.js";
 
   let gestartet = $state(false);
   let ansicht = $state("terminal"); // "terminal" | "uebersicht" | "pinnwand"
@@ -34,6 +35,11 @@
     clearTimeout(hinweisTimer);
     hinweisTimer = setTimeout(() => (hinweis = ""), 3500);
   }
+  function meldeKonflikt() {
+    schade();
+    melde("Das hat sich gerade geändert. Schau noch einmal nach.");
+  }
+
   let fensterStart = $state(""); // "abholen": Fenster gleich bei „Wer holt ab?“ öffnen
   function waehle(id, mitTag = false, start = "") {
     perTag = mitTag;
@@ -73,8 +79,11 @@
   nfc.onTag = (id) => {
     if (!gestartet) return;
     if (buero) return (bueroTag = { id, n: ++tagNr });
-    if (document.querySelector("dialog.pinnwand-dialog[open]")) return;
     if (!id) return melde("Dieser Anhänger lässt sich nicht lesen");
+    if (document.querySelector("dialog.pinnwand-dialog[open]")) {
+      schade();
+      return melde("Schließ zuerst das Pinnwandfenster und halte den Anhänger noch einmal hin.");
+    }
     const profilId = kita.tagProfil(id);
     if (!profilId) {
       if (!kita.profile.length) return melde("Noch keine Profile: zuerst im Büro eines anlegen");
@@ -136,7 +145,7 @@
   <div class="app">
     <TopBar {ansicht} onBuero={() => { gewaehlt = null; neuerTag = null; bueroTag = null; buero = true; }} onAnsicht={(a) => { pop(); ansicht = a; }} />
     {#if ansicht === "uebersicht"}
-      <Uebersicht onSelect={(id) => waehle(id)} onAbholen={(id) => waehle(id, false, "abholen")} />
+      <Uebersicht onKonflikt={meldeKonflikt} onSelect={(id) => waehle(id)} onAbholen={(id) => waehle(id, false, "abholen")} />
     {:else if ansicht === "pinnwand"}
       <Pinnwand />
     {:else}
@@ -144,7 +153,7 @@
     {/if}
   </div>
   {#if gewaehlt && fensterDatum === kita.datum}
-    {#key gewaehlt}<ProfilFenster bind:this={fenster} id={gewaehlt} {perTag} start={fensterStart} onClose={() => (gewaehlt = null)} />{/key}
+    {#key gewaehlt}<ProfilFenster bind:this={fenster} id={gewaehlt} {perTag} start={fensterStart} onKonflikt={meldeKonflikt} onClose={() => (gewaehlt = null)} />{/key}
   {/if}
   {#if neuerTag}
     <NfcZuordnen tag={neuerTag} onDone={(id) => { neuerTag = null; waehle(id, true); }} onClose={() => (neuerTag = null)} />
@@ -152,10 +161,11 @@
   {#if buero}
     <Buero tag={bueroTag} onClose={() => (buero = false)} />
   {/if}
-  {#if hinweis}<div class="hinweis" role="status">{hinweis}</div>{/if}
+  <div use:hinweisImVordergrund={hinweis}></div>
 {/if}
 
 <style>
   .app { height: 100%; display: flex; flex-direction: column; }
-  .hinweis { position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); z-index: 40; background: var(--ink); color: #fff; padding: 0.7rem 1.2rem; border-radius: 99px; font-weight: 800; box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.3); max-width: 90vw; text-align: center; }
+  :global(.app-hinweis) { position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); z-index: 40; background: var(--ink); color: #fff; padding: 0.7rem 1.2rem; border-radius: 99px; font-weight: 800; box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.3); width: max-content; max-width: 90vw; text-align: center; pointer-events: none; }
+  :global(.app-hinweis:empty) { padding: 0; box-shadow: none; }
 </style>

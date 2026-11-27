@@ -11,7 +11,7 @@
   import { sag } from "../lib/sprechen.svelte.js";
   import { tagesbericht, abholerDa } from "../lib/tagebuch.js";
 
-  let { id, onClose, perTag = false, start = "" } = $props();
+  let { id, onClose, onKonflikt, perTag = false, start = "" } = $props();
 
   let p = $derived(kita.profil(id));
   let st = $derived(kita.status(id));
@@ -43,13 +43,18 @@
     if (kita.status(id) === "offen") sag(`Hallo ${p.name}!`);
   });
 
-  function waehle(z) {
+  function konflikt() {
+    onClose();
+    onKonflikt();
+  }
+
+  async function waehle(z) {
     zeit = z;
     pop();
-    if (st === "da") kita.zeitAendern(id, z);
+    if (st === "da" && !(await kita.zeitAendern(id, z))) konflikt();
   }
   async function anmelden() {
-    if (!(await kita.anmelden(id, zeit))) return onClose();
+    if (!(await kita.anmelden(id, zeit))) return konflikt();
     hallo();
     sag(kind ? `Viel Spaß, ${p.name}!` : `Guten Morgen, ${p.name}!`);
     onClose();
@@ -62,13 +67,13 @@
     } else abholen();
   }
   async function abholen(von = null) {
-    if (!(await kita.abholen(id, von))) return onClose();
+    if (!(await kita.abholen(id, von))) return konflikt();
     tschuess();
     sag(!kind ? `Schönen Feierabend, ${p.name}!` : von ? `Tschüss ${p.name}! ${abholerDa(von.text)}` : `Tschüss ${p.name}! Bis bald!`);
     onClose();
   }
   async function melden() {
-    if (!(await kita.melden(id, schritt, datumPlus(kita.datum, tage)))) return onClose();
+    if (!(await kita.melden(id, schritt, datumPlus(kita.datum, tage)))) return konflikt();
     schade();
     sag(schritt === "krank" ? `Gute Besserung, ${p.name}!` : `Bis bald, ${p.name}!`);
     onClose();
@@ -76,13 +81,13 @@
   async function zurueck() {
     if (st === "abgeholt") {
       // Wieder angemeldet: Fenster schließen wie beim Anmelden, nicht gleich „Abholen“ zeigen
-      if (!(await kita.wiederDa(id))) return onClose();
+      if (!(await kita.wiederDa(id))) return konflikt();
       hallo();
       sag(`Schön, dass du wieder da bist, ${p.name}!`);
       return onClose();
     }
     pop();
-    await kita.zuruecknehmen(id);
+    if (!(await kita.zuruecknehmen(id))) return konflikt();
     zeit = startZeit();
   }
   /** Der Anhänger des Profils wurde noch einmal hingehalten: das Naheliegende tun. */

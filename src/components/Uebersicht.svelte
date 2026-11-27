@@ -7,7 +7,7 @@
   import { settings } from "../lib/settings.svelte.js";
   import { ESSEN, SCHLAF } from "../lib/tagebuch.js";
 
-  let { onSelect, onAbholen } = $props();
+  let { onSelect, onAbholen, onKonflikt } = $props();
 
   let kinder = $derived(kita.profile.filter((p) => p.rolle === "kind"));
   let erzieher = $derived(kita.profile.filter((p) => p.rolle === "erzieher"));
@@ -37,6 +37,7 @@
     // Erst fragen, wer abholt (im Fenster des Tiers), sonst gleich auschecken
     if (settings.value.abholerFragen && settings.value.abholer.length) return onAbholen(id);
     if (await kita.abholen(id)) tschuess();
+    else onKonflikt();
   }
 
   // Tagebuch: alle Tiere, die heute da sind oder waren

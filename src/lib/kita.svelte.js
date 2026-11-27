@@ -173,6 +173,7 @@ class Kita {
       const { [id]: _, ...rest } = this.heute;
       this.heute = rest;
     }
+    return geloescht;
   }
 
   async profilSpeichern(roh) {
