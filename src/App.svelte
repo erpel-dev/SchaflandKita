@@ -11,7 +11,7 @@
   import { settings } from "./lib/settings.svelte.js";
   import { sortierePlan, planStand } from "./lib/tagesplan.js";
   import { aktionById } from "./lib/aktionen.js";
-  import { sag } from "./lib/sprechen.js";
+  import { sag } from "./lib/sprechen.svelte.js";
   import { untrack } from "svelte";
   import { kita } from "./lib/kita.svelte.js";
   import { update } from "./lib/update.svelte.js";
@@ -21,6 +21,7 @@
   let ansicht = $state("terminal"); // "terminal" | "uebersicht" | "pinnwand"
   let buero = $state(false);
   let gewaehlt = $state(null); // id des Profils, dessen Fenster offen ist
+  let fensterDatum = $state(null);
   let perTag = $state(false); // das Fenster wurde mit einem NFC-Anhänger geöffnet
   let fenster = $state(null);
   let neuerTag = $state(null); // Kennung eines unbekannten Anhängers, der gerade zugeordnet wird
@@ -37,6 +38,7 @@
   function waehle(id, mitTag = false, start = "") {
     perTag = mitTag;
     fensterStart = start;
+    fensterDatum = kita.datum;
     gewaehlt = id;
   }
 
@@ -71,6 +73,7 @@
   nfc.onTag = (id) => {
     if (!gestartet) return;
     if (buero) return (bueroTag = { id, n: ++tagNr });
+    if (document.querySelector("dialog.pinnwand-dialog[open]")) return;
     if (!id) return melde("Dieser Anhänger lässt sich nicht lesen");
     const profilId = kita.tagProfil(id);
     if (!profilId) {
@@ -80,9 +83,12 @@
       return;
     }
     neuerTag = null;
-    if (gewaehlt === profilId && fenster) fenster.bestaetigen();
+    if (perTag && gewaehlt === profilId && fensterDatum === kita.datum && fenster) fenster.bestaetigen();
     else waehle(profilId, true);
   };
+
+  $effect(() => kita.beobachteTag(kita.datum));
+  $effect(() => kita.beobachteNachrichten());
 
   // Uhr: Abholzeiten, Wartezeiten und der Tageswechsel um Mitternacht hängen daran
   $effect(() => {
@@ -137,7 +143,7 @@
       <Terminal onSelect={(id) => waehle(id)} />
     {/if}
   </div>
-  {#if gewaehlt}
+  {#if gewaehlt && fensterDatum === kita.datum}
     {#key gewaehlt}<ProfilFenster bind:this={fenster} id={gewaehlt} {perTag} start={fensterStart} onClose={() => (gewaehlt = null)} />{/key}
   {/if}
   {#if neuerTag}

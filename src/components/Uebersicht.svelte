@@ -2,7 +2,7 @@
   // Übersicht für Erzieher: wer ist da, wer wird wann abgeholt, wer fehlt
   import Avatar from "./Avatar.svelte";
   import { kita } from "../lib/kita.svelte.js";
-  import { warteInfo, datumLang } from "../lib/zeit.js";
+  import { istZeit, warteInfo, datumLang } from "../lib/zeit.js";
   import { tschuess, pop } from "../lib/sounds.js";
   import { settings } from "../lib/settings.svelte.js";
   import { ESSEN, SCHLAF } from "../lib/tagebuch.js";
@@ -17,7 +17,8 @@
     kinder
       .filter((p) => kita.status(p.id) === "da")
       .map((p) => ({ p, e: kita.eintrag(p.id), w: warteInfo(kita.eintrag(p.id).abholzeit, kita.uhrzeit) }))
-      .sort((a, b) => a.e.abholzeit.localeCompare(b.e.abholzeit) || a.p.name.localeCompare(b.p.name, "de")),
+      .sort((a, b) => (istZeit(a.e.abholzeit) ? a.e.abholzeit : "24:00")
+      .localeCompare(istZeit(b.e.abholzeit) ? b.e.abholzeit : "24:00") || a.p.name.localeCompare(b.p.name, "de")),
   );
   let andere = $derived(kinder.filter((p) => kita.status(p.id) !== "da"));
 
@@ -25,7 +26,7 @@
     const e = kita.eintrag(p.id);
     const bis = e?.meldungBis && e.meldungBis > kita.datum ? ` bis ${datumLang(e.meldungBis)}` : "";
     switch (kita.status(p.id)) {
-      case "da": return `da bis ${e.abholzeit}`;
+      case "da": return istZeit(e.abholzeit) ? `da bis ${e.abholzeit}` : "da · Dienstende unbekannt";
       case "abgeholt": return e.nichtAbgeholt ? "nicht abgeholt" : `gegangen ${e.gegangenUm}${e.abgeholtVon ? ` mit ${e.abgeholtVon}` : ""}`;
       case "krank": return `krank${bis}`;
       case "abwesend": return `nicht da${bis}`;
@@ -35,15 +36,14 @@
   async function abholen(id) {
     // Erst fragen, wer abholt (im Fenster des Tiers), sonst gleich auschecken
     if (settings.value.abholerFragen && settings.value.abholer.length) return onAbholen(id);
-    await kita.abholen(id);
-    tschuess();
+    if (await kita.abholen(id)) tschuess();
   }
 
   // Tagebuch: alle Tiere, die heute da sind oder waren
   let tagebuch = $derived(kinder.filter((p) => ["da", "abgeholt"].includes(kita.status(p.id))));
   function trage(id, feld, wert) {
     pop();
-    kita.tagebuch(id, { [feld]: kita.eintrag(id)?.[feld] === wert ? null : wert });
+    kita.tagebuch(id, { [feld]: wert }, true);
   }
 </script>
 
@@ -60,7 +60,7 @@
       <h2><span class="emoji">🕒</span> Abholliste</h2>
       {#each abholliste as { p, e, w } (p.id)}
         <div class="zeile abhol" class:spaet={w.ueberfaellig} data-profil={p.name}>
-          <b class="zeit">{e.abholzeit}</b>
+          <b class="zeit">{istZeit(e.abholzeit) ? e.abholzeit : "–"}</b>
           <button class="wer" onclick={() => onSelect(p.id)}>
             <Avatar bild={p.bild} farbe={p.farbe} size="2.8rem" />
             <span><b>{p.name}</b><small>{w.text}</small></span>

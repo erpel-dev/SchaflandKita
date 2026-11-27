@@ -48,6 +48,7 @@ export function dauerText(min) {
 
 /** Wie lange noch bis zur Abholzeit, oder wie lange sie schon vorbei ist. */
 export function warteInfo(abholzeit, jetztZeit) {
+  if (!istZeit(abholzeit)) return { ueberfaellig: false, minuten: null, text: "Abholzeit unbekannt" };
   const diff = minuten(abholzeit) - minuten(jetztZeit);
   if (diff > 0) return { ueberfaellig: false, minuten: diff, text: `in ${dauerText(diff)}` };
   if (diff === 0) return { ueberfaellig: false, minuten: 0, text: "jetzt" };

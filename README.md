@@ -27,7 +27,7 @@ Um Mitternacht beginnt ein neuer Tag: Alle stehen wieder auf „Noch nicht da“
 
 - **Profile:** anlegen, ändern, löschen. Bild ist ein Schaf (fünf Fellfarben), ein Emoji oder ein Foto des Kuscheltiers.
 - **Export:** schreibt alle Profile samt Fotos und NFC-Zuordnungen in `schafland-kita-profile-<Datum>.json`, auf Wunsch mit Protokoll.
-- **Import:** zeigt zuerst eine Vorschau (neu, geändert, gleich). „Zusammenführen“ löscht nichts, „Ersetzen“ nimmt nur die Datei. Ungültige Dateien werden abgelehnt, ohne etwas zu ändern.
+- **Import:** zeigt zuerst eine Vorschau (neu, geändert, gleich). „Zusammenführen“ ergänzt das Protokoll und erhält bestehende Einträge für dasselbe Profil und Datum. „Ersetzen“ entfernt Profile, die in der Datei fehlen, und übernimmt die enthaltenen Protokolleinträge auch bei Überschneidungen. Ungültige Dateien werden abgelehnt, ohne etwas zu ändern.
 - **Protokoll:** Anwesenheit vergangener Tage.
 - **Nachrichten:** Nachrichten der Pinnwand löschen.
 - **NFC:** Lesen ein- und ausschalten, Zuordnungen der Anhänger ändern oder aufheben. Ein im Büro hingehaltener Anhänger wird in der Liste hervorgehoben bzw. zum Zuordnen angeboten.

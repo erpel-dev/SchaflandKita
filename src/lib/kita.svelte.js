@@ -1,4 +1,5 @@
 // Der Zustand der Kita: alle Profile und wer heute da, abgeholt, krank oder abwesend ist.
+import { liveQuery } from "dexie";
 import { db, kvGet, kvSet } from "./db.js";
 import { datumStr, zeitStr, tageVonBis } from "./zeit.js";
 import { normalisiereProfil, sortiereProfile, zusammenfuehren, neueId } from "./profile-io.js";
@@ -39,11 +40,31 @@ class Kita {
     await this.#tagLaden();
   }
 
+  beobachteTag(datum) {
+    const abo = liveQuery(() => db.tage.where("datum").equals(datum).toArray()).subscribe((rows) => {
+      if (this.datum === datum) this.heute = Object.fromEntries(rows.map((r) => [r.profilId, r]));
+    });
+    return () => abo.unsubscribe();
+  }
+
+  beobachteNachrichten() {
+    const abo = liveQuery(() => db.nachrichten.orderBy("erstelltAm").reverse().toArray()).subscribe((rows) => {
+      // Bei gleicher Zeit bleibt die bisherige Reihenfolge erhalten.
+      const reihenfolge = new Map(this.nachrichten.map((n, i) => [n.id, i]));
+      this.nachrichten = rows.sort((a, b) => b.erstelltAm.localeCompare(a.erstelltAm) ||
+        (reihenfolge.get(a.id) ?? -1) - (reihenfolge.get(b.id) ?? -1));
+    });
+    return () => abo.unsubscribe();
+  }
+
   async #tagLaden() {
-    const datum = datumStr(this.jetzt);
-    // Wer an einem früheren Tag noch angemeldet war, wurde nicht abgeholt: vermerken und abmelden
-    await db.tage.where("datum").below(datum).and((e) => e.status === "da").modify({ status: "abgeholt", nichtAbgeholt: true });
-    const rows = await db.tage.where("datum").equals(datum).toArray();
+    const datum = this.datum;
+    const rows = await db.transaction("rw", db.tage, async () => {
+      // Wer an einem früheren Tag noch angemeldet war, wurde nicht abgeholt.
+      await db.tage.where("datum").below(datum).and((e) => e.status === "da").modify({ status: "abgeholt", nichtAbgeholt: true });
+      return db.tage.where("datum").equals(datum).toArray();
+    });
+    if (this.datum !== datum) return;
     this.heute = Object.fromEntries(rows.map((r) => [r.profilId, r]));
     this.#geladen = datum;
   }
@@ -55,42 +76,47 @@ class Kita {
   }
 
   status(id) {
-    return this.heute[id]?.status ?? "offen";
+    return this.eintrag(id)?.status ?? "offen";
   }
   eintrag(id) {
-    return this.heute[id] ?? null;
+    const eintrag = this.heute[id];
+    return eintrag?.datum === this.datum ? eintrag : null;
   }
   profil(id) {
     return this.profile.find((p) => p.id === id) ?? null;
   }
 
-  async #setze(id, patch) {
-    const eintrag = {
-      profilId: id, datum: this.datum, status: "offen", gekommenUm: null, abholzeit: null, gegangenUm: null, meldungBis: null,
-      ...$state.snapshot(this.heute[id] ?? {}), ...patch,
-    };
-    await db.tage.put(eintrag);
-    this.heute = { ...this.heute, [id]: eintrag };
+  async #setze(id, status, patch) {
+    const datum = this.datum;
+    const eintrag = await db.transaction("rw", db.tage, db.profile, async () => {
+      if (!(await db.profile.get(id))) return null;
+      const alt = await db.tage.get([id, datum]);
+      if (!status.includes(alt?.status ?? "offen")) return null;
+      const neu = {
+        profilId: id, datum, status: "offen", gekommenUm: null, abholzeit: null, gegangenUm: null, meldungBis: null,
+        ...alt, ...(typeof patch === "function" ? patch(alt) : patch),
+      };
+      await db.tage.put(neu);
+      return neu;
+    });
+    if (eintrag && this.datum === datum) this.heute = { ...this.heute, [id]: eintrag };
+    return !!eintrag;
   }
 
   /** Bringen: anmelden mit Abholzeit (bei Erziehern: Dienstende). */
   anmelden(id, abholzeit) {
-    return this.#setze(id, { status: "da", gekommenUm: this.uhrzeit, abholzeit, gegangenUm: null, meldungBis: null });
+    return this.#setze(id, ["offen"], { status: "da", gekommenUm: this.uhrzeit, abholzeit, gegangenUm: null, meldungBis: null });
   }
   zeitAendern(id, abholzeit) {
-    if (this.status(id) !== "da") return;
-    return this.#setze(id, { abholzeit });
+    return this.#setze(id, ["da"], { abholzeit });
   }
   /** Abholen: auschecken. von = { text, bild }: wer abholt (freiwillig). */
   abholen(id, von = null) {
-    if (this.status(id) !== "da") return;
     const wer = abholerSauber(von);
-    return this.#setze(id, { status: "abgeholt", gegangenUm: this.uhrzeit, abgeholtVon: wer?.text ?? null, abgeholtVonBild: wer?.bild ?? null });
+    return this.#setze(id, ["da"], { status: "abgeholt", gegangenUm: this.uhrzeit, abgeholtVon: wer?.text ?? null, abgeholtVonBild: wer?.bild ?? null });
   }
-  /** Tagebuch: gegessen ("alles" | "etwas" | "nichts" | null) und geschlafen ("ja" | "kurz" | "nein" | null). */
-  tagebuch(id, { gegessen, geschlafen } = {}) {
-    const st = this.status(id);
-    if (st !== "da" && st !== "abgeholt") return;
+  /** Tagebuchangaben setzen oder beim erneuten Antippen derselben Angabe zurücknehmen. */
+  tagebuch(id, { gegessen, geschlafen } = {}, umschalten = false) {
     const patch = {};
     if (gegessen !== undefined) {
       if (gegessen !== null && !ESSEN.some((e) => e.id === gegessen)) throw new Error("Unbekannte Angabe zum Essen");
@@ -100,35 +126,53 @@ class Kita {
       if (geschlafen !== null && !SCHLAF.some((x) => x.id === geschlafen)) throw new Error("Unbekannte Angabe zum Schlafen");
       patch.geschlafen = geschlafen;
     }
-    return this.#setze(id, patch);
+    return this.#setze(id, ["da", "abgeholt"], (alt) => Object.fromEntries(
+      Object.entries(patch).map(([feld, wert]) => [feld, umschalten && alt[feld] === wert ? null : wert]),
+    ));
   }
   /** Versehentlich abgeholt: wieder anmelden, Abholzeit bleibt. */
   wiederDa(id) {
-    if (this.status(id) !== "abgeholt") return;
-    return this.#setze(id, { status: "da", gegangenUm: null, abgeholtVon: null, abgeholtVonBild: null });
+    return this.#setze(id, ["abgeholt"], { status: "da", gegangenUm: null, abgeholtVon: null, abgeholtVonBild: null, nichtAbgeholt: false });
   }
 
   /** Krank oder abwesend melden, heute oder bis einschließlich "bis". */
   async melden(id, status, bis = this.datum) {
     if (status !== "krank" && status !== "abwesend") throw new Error("unbekannte Meldung");
-    const tage = tageVonBis(this.datum, bis < this.datum ? this.datum : bis);
+    const heute = this.datum;
+    const tage = tageVonBis(heute, bis < heute ? heute : bis);
     const letzter = tage.at(-1);
     const eintraege = tage.map((datum) => ({ profilId: id, datum, status, gekommenUm: null, abholzeit: null, gegangenUm: null, meldungBis: letzter }));
-    await db.tage.bulkPut(eintraege);
-    this.heute = { ...this.heute, [id]: eintraege[0] };
+    const gespeichert = await db.transaction("rw", db.tage, db.profile, async () => {
+      if (!(await db.profile.get(id))) return false;
+      const alt = await db.tage.get([id, heute]);
+      if (alt && alt.status !== "offen") return false;
+      await db.tage.bulkPut(eintraege);
+      return true;
+    });
+    if (gespeichert && this.datum === heute) this.heute = { ...this.heute, [id]: eintraege[0] };
+    return gespeichert;
   }
 
   /** Meldung oder Anmeldung zurücknehmen: zurück auf „noch nicht da“. Mehrtägige Meldungen enden ganz. */
   async zuruecknehmen(id) {
-    const alt = this.heute[id];
-    if (!alt) return;
-    if (alt.status === "krank" || alt.status === "abwesend") {
-      await db.tage.where("profilId").equals(id).and((e) => e.datum >= this.datum && e.status === alt.status).delete();
-    } else {
-      await db.tage.delete([id, this.datum]);
+    const datum = this.datum;
+    const erwartet = this.status(id);
+    const geloescht = await db.transaction("rw", db.tage, async () => {
+      const alt = await db.tage.get([id, datum]);
+      if (!alt || alt.status !== erwartet) return false;
+      if (alt.status === "krank" || alt.status === "abwesend") {
+        await db.tage.where("profilId").equals(id)
+          .and((e) => e.datum >= datum && e.datum <= (alt.meldungBis ?? datum) && e.status === alt.status)
+          .delete();
+      } else {
+        await db.tage.delete([id, datum]);
+      }
+      return true;
+    });
+    if (geloescht && this.datum === datum) {
+      const { [id]: _, ...rest } = this.heute;
+      this.heute = rest;
     }
-    const { [id]: _, ...rest } = this.heute;
-    this.heute = rest;
   }
 
   async profilSpeichern(roh) {
@@ -139,20 +183,19 @@ class Kita {
   }
 
   async profilLoeschen(id) {
-    await db.transaction("rw", db.profile, db.tage, db.tags, async () => {
+    await db.transaction("rw", db.profile, db.tage, db.tags, db.nachrichten, async () => {
       await db.profile.delete(id);
       await db.tage.where("profilId").equals(id).delete();
       await db.tags.where("profilId").equals(id).delete();
+      // Nachrichten bleiben mit dem Autorennamen stehen.
+      await db.nachrichten.filter((n) => Object.hasOwn(n.reaktionen, id))
+        .modify((n) => { delete n.reaktionen[id]; });
     });
     this.profile = this.profile.filter((p) => p.id !== id);
     this.tags = this.tags.filter((t) => t.profilId !== id);
     const { [id]: _, ...rest } = this.heute;
     this.heute = rest;
-    // Seine Reaktionen verschwinden; seine Nachrichten bleiben mit dem Namen stehen
-    for (const n of this.nachrichten.filter((n) => id in n.reaktionen)) {
-      const { [id]: weg, ...reaktionen } = $state.snapshot(n.reaktionen);
-      await this.#nachrichtErsetzen({ ...$state.snapshot(n), reaktionen });
-    }
+    this.nachrichten = await db.nachrichten.orderBy("erstelltAm").reverse().toArray();
   }
 
   // ---------- NFC-Anhänger ----------
@@ -182,11 +225,6 @@ class Kita {
 
   // ---------- Pinnwand ----------
 
-  async #nachrichtErsetzen(n) {
-    await db.nachrichten.put(n);
-    this.nachrichten = this.nachrichten.map((alt) => (alt.id === n.id ? n : alt));
-  }
-
   /** Nur Erzieher schreiben Nachrichten. bild ist ein optionales großes Bildchen. */
   async nachrichtSchreiben(autorId, text, bild = "") {
     const autor = this.profil(autorId);
@@ -196,20 +234,25 @@ class Kita {
     if (inhalt.length > MAX_TEXT) throw new Error(`Die Nachricht ist zu lang (höchstens ${MAX_TEXT} Zeichen)`);
     const n = { id: neueId(), autorId, autorName: autor.name, text: inhalt, bild: BILDER.includes(bild) ? bild : "", erstelltAm: this.jetzt.toISOString(), reaktionen: {} };
     await db.nachrichten.put(n);
-    this.nachrichten = [n, ...this.nachrichten];
+    this.nachrichten = [n, ...this.nachrichten.filter((alt) => alt.id !== n.id)];
     return n;
   }
 
   /** Jedes Profil hat je Nachricht höchstens eine Reaktion; dieselbe noch einmal nimmt sie zurück. */
   async reagieren(nachrichtId, profilId, emoji) {
-    const n = this.nachrichten.find((x) => x.id === nachrichtId);
-    if (!n) return;
-    if (!this.profil(profilId)) throw new Error("Unbekanntes Profil");
-    if (!REAKTIONEN.includes(emoji)) throw new Error("Unbekannte Reaktion");
-    const reaktionen = { ...$state.snapshot(n.reaktionen) };
-    if (reaktionen[profilId] === emoji) delete reaktionen[profilId];
-    else reaktionen[profilId] = emoji;
-    await this.#nachrichtErsetzen({ ...$state.snapshot(n), reaktionen });
+    const n = await db.transaction("rw", db.nachrichten, db.profile, async () => {
+      const aktuell = await db.nachrichten.get(nachrichtId);
+      if (!aktuell) return null;
+      if (!(await db.profile.get(profilId))) throw new Error("Unbekanntes Profil");
+      if (!REAKTIONEN.includes(emoji)) throw new Error("Unbekannte Reaktion");
+      if (aktuell.reaktionen[profilId] === emoji) delete aktuell.reaktionen[profilId];
+      else aktuell.reaktionen[profilId] = emoji;
+      await db.nachrichten.put(aktuell);
+      return aktuell;
+    });
+    this.nachrichten = n
+      ? this.nachrichten.map((alt) => alt.id === n.id ? n : alt)
+      : this.nachrichten.filter((alt) => alt.id !== nachrichtId);
   }
 
   async nachrichtLoeschen(id) {
@@ -225,16 +268,25 @@ class Kita {
 
   /** Geprüfte Profile (aus pruefeImport) übernehmen. modus: "zusammenfuehren" | "ersetzen" */
   async importieren(profile, modus = "zusammenfuehren", tage = [], tags = []) {
-    const liste = zusammenfuehren($state.snapshot(this.profile), $state.snapshot(profile), modus);
-    const ids = new Set(liste.map((p) => p.id));
+    const neueProfile = $state.snapshot(profile);
+    const neueTage = $state.snapshot(tage);
+    const neueTags = $state.snapshot(tags);
     const zeit = this.jetzt.toISOString();
-    await db.transaction("rw", db.profile, db.tage, db.tags, async () => {
-      await db.profile.clear();
-      await db.profile.bulkPut(liste);
-      await db.tage.filter((e) => !ids.has(e.profilId)).delete();
-      await db.tags.filter((t) => !ids.has(t.profilId)).delete();
-      if (tage.length) await db.tage.bulkPut($state.snapshot(tage));
-      if (tags.length) await db.tags.bulkPut($state.snapshot(tags).map((t) => ({ id: t.id, profilId: t.profilId, zugeordnetAm: zeit })));
+    const liste = await db.transaction("rw", db.profile, db.tage, db.tags, async () => {
+      const liste = zusammenfuehren(await db.profile.toArray(), neueProfile, modus);
+      const ids = new Set(liste.map((p) => p.id));
+      if (modus === "ersetzen") {
+        await db.profile.clear();
+        await db.tage.filter((e) => !ids.has(e.profilId)).delete();
+        await db.tags.filter((t) => !ids.has(t.profilId)).delete();
+      }
+      await db.profile.bulkPut(neueProfile);
+      if (neueTage.length) {
+        const belegt = modus === "ersetzen" ? [] : await db.tage.bulkGet(neueTage.map((e) => [e.profilId, e.datum]));
+        await db.tage.bulkPut(neueTage.filter((_, i) => !belegt[i]));
+      }
+      if (neueTags.length) await db.tags.bulkPut(neueTags.map((t) => ({ id: t.id, profilId: t.profilId, zugeordnetAm: zeit })));
+      return liste;
     });
     this.profile = sortiereProfile(liste);
     this.tags = await db.tags.toArray();

@@ -1,12 +1,13 @@
 <script>
   // Pinnwand: Erzieher schreiben Nachrichten, alle können mit einem Bildchen reagieren
+  import { modal } from "../lib/modal.js";
   import { onMount } from "svelte";
   import Avatar from "./Avatar.svelte";
   import { kita } from "../lib/kita.svelte.js";
   import { REAKTIONEN, BILDER, MAX_TEXT, reaktionsGruppen } from "../lib/nachrichten.js";
   import { zeitpunktText } from "../lib/zeit.js";
   import { pop, hallo } from "../lib/sounds.js";
-  import { sag, canSpeak } from "../lib/sprechen.js";
+  import { sag, canSpeak } from "../lib/sprechen.svelte.js";
 
   let erzieher = $derived(kita.profile.filter((p) => p.rolle === "erzieher"));
 
@@ -17,12 +18,18 @@
   // ---------- Schreiben ----------
   let entwurf = $state(null); // { autorId, text, bild }
   let fehler = $state("");
+  let sendet = $state(false);
   function schreiben() {
     pop();
     entwurf = { autorId: erzieher.length === 1 ? erzieher[0].id : null, text: "", bild: "" };
     fehler = "";
   }
+  function abbrechen() {
+    if (!sendet) entwurf = null;
+  }
   async function posten() {
+    if (sendet) return;
+    sendet = true;
     try {
       await kita.nachrichtSchreiben(entwurf.autorId, entwurf.text, entwurf.bild);
       await kita.pinnwandGesehen();
@@ -30,6 +37,8 @@
       entwurf = null;
     } catch (err) {
       fehler = err.message;
+    } finally {
+      sendet = false;
     }
   }
 
@@ -48,8 +57,6 @@
 
   const autor = (n) => kita.profil(n.autorId);
 </script>
-
-<svelte:window onkeydown={(ev) => ev.key === "Escape" && ((wahl = null), (entwurf = null))} />
 
 <main>
   <div class="kopf">
@@ -89,8 +96,8 @@
 </main>
 
 {#if entwurf}
-  <div class="schleier" role="presentation" onclick={(ev) => ev.target === ev.currentTarget && (entwurf = null)}>
-    <div class="fenster" role="dialog" aria-modal="true" aria-label="Nachricht schreiben">
+  <dialog class="schleier pinnwand-dialog" aria-label="Nachricht schreiben" use:modal oncancel={(ev) => { ev.preventDefault(); abbrechen(); }} onclick={(ev) => ev.target === ev.currentTarget && abbrechen()}>
+    <div class="fenster">
       <h3>Wer schreibt?</h3>
       <div class="koepfe">
         {#each erzieher as p (p.id)}
@@ -110,16 +117,16 @@
       </div>
       {#if fehler}<p class="err">{fehler}</p>{/if}
       <div class="knoepfe">
-        <button class="big-btn" disabled={!entwurf.autorId || !entwurf.text.trim()} onclick={posten}><span class="emoji">📌</span> Anpinnen</button>
-        <button class="big-btn light" onclick={() => (entwurf = null)}>Abbrechen</button>
+        <button class="big-btn" disabled={sendet || !entwurf.autorId || !entwurf.text.trim()} onclick={posten}><span class="emoji">📌</span> Anpinnen</button>
+        <button class="big-btn light" disabled={sendet} onclick={abbrechen}>Abbrechen</button>
       </div>
     </div>
-  </div>
+  </dialog>
 {/if}
 
 {#if wahl && wahlNachricht}
-  <div class="schleier" role="presentation" onclick={(ev) => ev.target === ev.currentTarget && (wahl = null)}>
-    <div class="fenster" role="dialog" aria-modal="true" aria-label="Wer bist du?">
+  <dialog class="schleier pinnwand-dialog" aria-label="Wer bist du?" use:modal oncancel={(ev) => { ev.preventDefault(); wahl = null; }} onclick={(ev) => ev.target === ev.currentTarget && (wahl = null)}>
+    <div class="fenster">
       <h3><span class="emoji gross">{wahl.emoji}</span> Wer bist du?</h3>
       <div class="koepfe">
         {#each kita.profile as p (p.id)}
@@ -132,7 +139,7 @@
       </div>
       <div class="knoepfe"><button class="big-btn light" onclick={() => (wahl = null)}><span class="emoji">↩️</span> Zurück</button></div>
     </div>
-  </div>
+  </dialog>
 {/if}
 
 <style>
@@ -157,7 +164,6 @@
   .wer { display: inline-flex; margin-left: -0.15rem; }
   .leer { color: var(--ink-soft); font-size: 1.2rem; margin: 2rem 0; text-align: center; }
 
-  .schleier { position: fixed; inset: 0; z-index: 20; background: rgba(42, 47, 38, 0.45); display: grid; place-items: center; padding: 1rem; }
   .fenster { width: min(46rem, 100%); max-height: 100%; overflow-y: auto; background: var(--wool); border-radius: 1.8rem; padding: 1.3rem; display: flex; flex-direction: column; gap: 0.8rem; box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.3); }
   .koepfe { display: flex; flex-wrap: wrap; gap: 0.6rem; }
   .kopfknopf { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.6rem 0.5rem; min-width: 6.4rem; border-radius: 1.1rem; background: #fff; border: 3px solid var(--wool-line); box-shadow: 0 0.25rem 0 var(--wool-line); }
