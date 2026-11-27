@@ -48,16 +48,16 @@
 
   <div class="uhr" aria-label="Uhrzeit"><span class="tag">{wochentag(kita.datum)}</span> <span class="zeit">{kita.uhrzeit}</span></div>
   {#if ansicht !== "terminal"}
-    <button class="pille" onclick={() => onAnsicht("terminal")}><span class="emoji">🏠</span> <span class="txt">Zurück</span></button>
+    <button class="pille" aria-label="Zurück" onclick={() => onAnsicht("terminal")}><span class="emoji">🏠</span> <span class="txt">Zurück</span></button>
   {/if}
   {#if ansicht !== "pinnwand"}
-    <button class="pille" onclick={() => onAnsicht("pinnwand")}>
+    <button class="pille" aria-label={kita.ungelesen ? `Pinnwand, ${kita.ungelesen} neue Nachrichten` : "Pinnwand"} onclick={() => onAnsicht("pinnwand")}>
       <span class="emoji">📌</span> <span class="txt">Pinnwand</span>
       {#if kita.ungelesen}<span class="neu" aria-label={`${kita.ungelesen} neue Nachrichten`}>{kita.ungelesen}</span>{/if}
     </button>
   {/if}
   {#if ansicht !== "uebersicht"}
-    <button class="pille" onclick={() => onAnsicht("uebersicht")}><span class="emoji">📋</span> <span class="txt">Übersicht</span></button>
+    <button class="pille" aria-label="Übersicht" onclick={() => onAnsicht("uebersicht")}><span class="emoji">📋</span> <span class="txt">Übersicht</span></button>
   {/if}
 </header>
 

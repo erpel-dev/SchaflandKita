@@ -2,7 +2,7 @@
 
 > Hier bin ich Schaf, hier darf ich spielen
 
-**Sofort ausprobieren:** https://erpel-dev.github.io/SchaflandKita/ – läuft im Browser (Chrome, Edge, Safari, Firefox) und lässt sich als App installieren: Chrome/Edge → „App installieren“, iPhone/iPad → Teilen → „Zum Home-Bildschirm“. Danach geht alles auch offline. Profile und Anwesenheit bleiben nur auf dem jeweiligen Gerät.
+**Sofort ausprobieren:** https://erpel-dev.github.io/SchaflandKita/ – läuft in aktuellen Versionen von Chrome, Edge, Safari und Firefox (Safari bzw. iOS/iPadOS ab 15.4) und lässt sich als App installieren: Chrome/Edge → „App installieren“, iPhone/iPad → Teilen → „Zum Home-Bildschirm“. Danach geht alles auch offline. Profile und Anwesenheit bleiben nur auf dem jeweiligen Gerät. In gleichzeitig geöffneten Tabs werden die heutige Anwesenheit und die Pinnwand laufend aktualisiert. Für Änderungen an Profilen, NFC-Zuordnungen und Einstellungen den anderen Tab neu laden.
 
 Spiel-Terminal für den Kuscheltier-Kindergarten, gedacht für Kinder von 4 bis 6 Jahren. Tiere und Erzieher werden morgens mit Abholzeit angemeldet, später abgeholt (ausgecheckt) oder krank bzw. abwesend gemeldet. An der Pinnwand schreiben Erzieher Nachrichten, auf die alle reagieren können. Dazu kommen ein Tagesplan als Bilderleiste, ein Tagebuch für Essen und Schlafen und Aktionen wie Sommerfest oder Weihnachtsmarkt. Technik und Aussehen stammen von der [Schafland-Kasse](https://github.com/erpel-dev/Schafland): Svelte 5, Vite, PWA, Daten in der IndexedDB des Browsers. Es gibt keinen Server; alles bleibt auf dem einen Gerät.
 
@@ -27,7 +27,7 @@ Um Mitternacht beginnt ein neuer Tag: Alle stehen wieder auf „Noch nicht da“
 
 - **Profile:** anlegen, ändern, löschen. Bild ist ein Schaf (fünf Fellfarben), ein Emoji oder ein Foto des Kuscheltiers.
 - **Export:** schreibt alle Profile samt Fotos und NFC-Zuordnungen in `schafland-kita-profile-<Datum>.json`, auf Wunsch mit Protokoll.
-- **Import:** zeigt zuerst eine Vorschau (neu, geändert, gleich). „Zusammenführen“ löscht nichts, „Ersetzen“ nimmt nur die Datei. Ungültige Dateien werden abgelehnt, ohne etwas zu ändern.
+- **Import:** zeigt zuerst eine Vorschau (neu, geändert, gleich). „Zusammenführen“ ergänzt das Protokoll und erhält bestehende Einträge für dasselbe Profil und Datum. „Ersetzen“ entfernt Profile, die in der Datei fehlen, und übernimmt die enthaltenen Protokolleinträge auch bei Überschneidungen. Ungültige Dateien werden abgelehnt, ohne etwas zu ändern.
 - **Protokoll:** Anwesenheit vergangener Tage.
 - **Nachrichten:** Nachrichten der Pinnwand löschen.
 - **NFC:** Lesen ein- und ausschalten, Zuordnungen der Anhänger ändern oder aufheben. Ein im Büro hingehaltener Anhänger wird in der Liste hervorgehoben bzw. zum Zuordnen angeboten.

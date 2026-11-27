@@ -2,12 +2,12 @@
   // Startseite: alle Profile als große Kacheln, sortiert nach ihrem Zustand
   import Avatar from "./Avatar.svelte";
   import { kita } from "../lib/kita.svelte.js";
-  import { warteInfo } from "../lib/zeit.js";
+  import { istZeit, warteInfo } from "../lib/zeit.js";
   import { settings } from "../lib/settings.svelte.js";
   import { sortierePlan, planStand, planSatz } from "../lib/tagesplan.js";
   import { aktionById } from "../lib/aktionen.js";
   import { pop } from "../lib/sounds.js";
-  import { sag } from "../lib/sprechen.js";
+  import { sag } from "../lib/sprechen.svelte.js";
 
   let plan = $derived(sortierePlan(settings.value.tagesplan));
   let stand = $derived(planStand(plan, kita.uhrzeit));
@@ -40,7 +40,7 @@
   {#if aktion}<p class="aktion" data-test="aktion"><span class="emoji">{aktion.emoji}</span> {aktion.startText}</p>{/if}
   {#if plan.length}
     <nav class="plan" aria-label="Tagesplan">
-      {#each plan as punkt, i (punkt.zeit + punkt.text)}
+      {#each plan as punkt, i}
         <button class="punkt" class:jetzt={i === stand} class:vorbei={i < stand} aria-current={i === stand ? "time" : undefined} onclick={() => planTipp(i)}>
           <span class="emoji">{punkt.bild}</span>
           <b>{punkt.text}</b>
@@ -57,13 +57,13 @@
           {#each b.profile as p (p.id)}
             {@const st = kita.status(p.id)}
             {@const e = kita.eintrag(p.id)}
-            {@const spaet = st === "da" && e.abholzeit && warteInfo(e.abholzeit, kita.uhrzeit).ueberfaellig}
+            {@const spaet = st === "da" && istZeit(e.abholzeit) && warteInfo(e.abholzeit, kita.uhrzeit).ueberfaellig}
             <button class="kachel {st}" class:spaet data-profil={p.name} onclick={() => onSelect(p.id)}>
               {#if p.rolle === "erzieher"}<span class="rolle emoji" title="Erzieher">🧑‍🏫</span>{/if}
               <Avatar bild={p.bild} farbe={p.farbe} size="5.4rem" />
               <b>{p.name}</b>
               <span class="info">
-                {#if st === "da"}<span class="emoji">{spaet ? "⏰" : "🕒"}</span> {e.abholzeit}
+                {#if st === "da"}<span class="emoji">{spaet ? "⏰" : "🕒"}</span> {istZeit(e.abholzeit) ? e.abholzeit : "–"}
                 {:else if st === "krank"}<span class="emoji">🤒</span> krank
                 {:else if st === "abwesend"}<span class="emoji">🏖️</span> nicht da
                 {:else if st === "abgeholt"}<span class="emoji">👋</span> {e.gegangenUm ?? ""}

@@ -1,16 +1,17 @@
 <script>
   // Fenster eines Profils: anmelden mit Abholzeit, abholen, krank oder abwesend melden
+  import { modal } from "../lib/modal.js";
   import { onMount } from "svelte";
   import Avatar from "./Avatar.svelte";
   import Uhr from "./Uhr.svelte";
   import { kita } from "../lib/kita.svelte.js";
   import { settings } from "../lib/settings.svelte.js";
-  import { verschieben, datumPlus, datumLang, warteInfo } from "../lib/zeit.js";
+  import { istZeit, verschieben, datumPlus, datumLang, warteInfo } from "../lib/zeit.js";
   import { pop, hallo, tschuess, schade } from "../lib/sounds.js";
-  import { sag } from "../lib/sprechen.js";
+  import { sag } from "../lib/sprechen.svelte.js";
   import { tagesbericht, abholerDa } from "../lib/tagebuch.js";
 
-  let { id, onClose, perTag = false, start = "" } = $props();
+  let { id, onClose, onKonflikt, perTag = false, start = "" } = $props();
 
   let p = $derived(kita.profil(id));
   let st = $derived(kita.status(id));
@@ -20,7 +21,7 @@
 
   function startZeit() {
     const eintrag = kita.eintrag(id);
-    if (eintrag?.abholzeit) return eintrag.abholzeit;
+    if (istZeit(eintrag?.abholzeit)) return eintrag.abholzeit;
     const profil = kita.profil(id);
     if (profil?.ueblicheZeit) return profil.ueblicheZeit;
     const liste = settings.value.zeiten.map((z) => z.zeit).sort();
@@ -29,23 +30,31 @@
   let zeit = $state(startZeit());
   let abholer = $derived(settings.value.abholerFragen ? settings.value.abholer : []);
   // "haupt" | "krank" | "abwesend" | "wer" (Wer holt ab?)
-  let schritt = $state(start === "abholen" && kita.status(id) === "da" && kita.profil(id)?.rolle === "kind" && settings.value.abholerFragen && settings.value.abholer.length ? "wer" : "haupt");
+  function startSchritt() {
+    return start === "abholen" && st === "da" && kind && abholer.length ? "wer" : "haupt";
+  }
+  let schritt = $state(startSchritt());
   let bericht = $derived(tagesbericht(e));
   let tage = $state(0); // Meldung gilt heute + so viele weitere Tage
-  let spaet = $derived(st === "da" && e?.abholzeit ? warteInfo(e.abholzeit, kita.uhrzeit) : null);
+  let spaet = $derived(st === "da" && istZeit(e?.abholzeit) ? warteInfo(e.abholzeit, kita.uhrzeit) : null);
 
   onMount(() => {
     pop();
     if (kita.status(id) === "offen") sag(`Hallo ${p.name}!`);
   });
 
-  function waehle(z) {
+  function konflikt() {
+    onClose();
+    onKonflikt();
+  }
+
+  async function waehle(z) {
     zeit = z;
     pop();
-    if (st === "da") kita.zeitAendern(id, z);
+    if (st === "da" && !(await kita.zeitAendern(id, z))) konflikt();
   }
   async function anmelden() {
-    await kita.anmelden(id, zeit);
+    if (!(await kita.anmelden(id, zeit))) return konflikt();
     hallo();
     sag(kind ? `Viel Spaß, ${p.name}!` : `Guten Morgen, ${p.name}!`);
     onClose();
@@ -58,13 +67,13 @@
     } else abholen();
   }
   async function abholen(von = null) {
-    await kita.abholen(id, von);
+    if (!(await kita.abholen(id, von))) return konflikt();
     tschuess();
     sag(!kind ? `Schönen Feierabend, ${p.name}!` : von ? `Tschüss ${p.name}! ${abholerDa(von.text)}` : `Tschüss ${p.name}! Bis bald!`);
     onClose();
   }
   async function melden() {
-    await kita.melden(id, schritt, datumPlus(kita.datum, tage));
+    if (!(await kita.melden(id, schritt, datumPlus(kita.datum, tage)))) return konflikt();
     schade();
     sag(schritt === "krank" ? `Gute Besserung, ${p.name}!` : `Bis bald, ${p.name}!`);
     onClose();
@@ -72,13 +81,13 @@
   async function zurueck() {
     if (st === "abgeholt") {
       // Wieder angemeldet: Fenster schließen wie beim Anmelden, nicht gleich „Abholen“ zeigen
-      await kita.wiederDa(id);
+      if (!(await kita.wiederDa(id))) return konflikt();
       hallo();
       sag(`Schön, dass du wieder da bist, ${p.name}!`);
       return onClose();
     }
     pop();
-    await kita.zuruecknehmen(id);
+    if (!(await kita.zuruecknehmen(id))) return konflikt();
     zeit = startZeit();
   }
   /** Der Anhänger des Profils wurde noch einmal hingehalten: das Naheliegende tun. */
@@ -97,11 +106,9 @@
   const LAGE = { offen: "noch nicht da", da: "im Kindergarten", abgeholt: "schon zu Hause", krank: "krank", abwesend: "nicht da" };
 </script>
 
-<svelte:window onkeydown={(ev) => ev.key === "Escape" && onClose()} />
-
 {#if p}
-  <div class="schleier" role="presentation" onclick={(ev) => ev.target === ev.currentTarget && onClose()}>
-    <div class="fenster" role="dialog" aria-modal="true" aria-label={p.name}>
+  <dialog class="schleier" aria-label={p.name} use:modal oncancel={(ev) => { ev.preventDefault(); onClose(); }} onclick={(ev) => ev.target === ev.currentTarget && onClose()}>
+    <div class="fenster">
       <aside class="wer">
         <div class="blase">{GRUSS[st]}, {p.name}!</div>
         <Avatar bild={p.bild} farbe={p.farbe} size="9rem" />
@@ -111,13 +118,13 @@
       </aside>
 
       <div class="was">
-        {#if schritt === "wer"}
+        {#if schritt === "wer" && st === "da"}
           <h3><span class="emoji">👋</span> Wer holt {p.name} ab?</h3>
           {#if bericht.length}
             <div class="bericht" data-test="bericht">{#each bericht as b (b.text)}<span><span class="emoji">{b.bild}</span> {b.text}</span>{/each}</div>
           {/if}
           <div class="abholer">
-            {#each abholer as a (a.text)}
+            {#each abholer as a}
               <button class="wer-knopf" onclick={() => abholen($state.snapshot(a))}><span class="emoji">{a.bild}</span><b>{a.text}</b></button>
             {/each}
           </div>
@@ -125,7 +132,7 @@
             <button class="big-btn light" onclick={() => abholen()}>Ohne Angabe</button>
             <button class="big-btn light" onclick={() => (schritt = "haupt")}>Doch nicht</button>
           </div>
-        {:else if schritt !== "haupt"}
+        {:else if (schritt === "krank" || schritt === "abwesend") && st === "offen"}
           <h3><span class="emoji">{schritt === "krank" ? "🤒" : "🏖️"}</span> {schritt === "krank" ? "Wie lange krank?" : "Wie lange nicht da?"}</h3>
           <div class="fein gross">
             <button class="rund" aria-label="Einen Tag kürzer" disabled={tage === 0} onclick={() => { tage -= 1; pop(); }}>−</button>
@@ -144,7 +151,7 @@
             <h3>{kind ? "Wann wirst du abgeholt?" : "Bis wann arbeitest du heute?"}</h3>
           {/if}
           <div class="zeiten">
-            {#each zeiten as z (z.zeit)}
+            {#each zeiten as z}
               <button class="zeitknopf" class:an={z.zeit === zeit} aria-pressed={z.zeit === zeit} onclick={() => waehle(z.zeit)}>
                 <Uhr zeit={z.zeit} size="3.2rem" />
                 <span class="ziffern">{z.zeit}</span>
@@ -183,11 +190,10 @@
         {/if}
       </div>
     </div>
-  </div>
+  </dialog>
 {/if}
 
 <style>
-  .schleier { position: fixed; inset: 0; z-index: 20; background: rgba(42, 47, 38, 0.45); display: grid; place-items: center; padding: 1rem; }
   .fenster {
     width: min(58rem, 100%); max-height: 100%; overflow-y: auto; background: var(--wool); border-radius: 1.8rem;
     display: grid; grid-template-columns: 15rem 1fr; box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.3);
@@ -197,7 +203,7 @@
   .wer { background: linear-gradient(var(--sky), var(--sky-bottom)); border-radius: 1.8rem 0 0 1.8rem; padding: 1.3rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-align: center; }
   .blase { background: #fff; border-radius: 1.2rem; padding: 0.5rem 0.9rem; font-family: var(--f-display); font-weight: 700; font-size: 1.15rem; position: relative; margin-bottom: 0.6rem; }
   .blase::after { content: ""; position: absolute; left: 50%; bottom: -0.5rem; margin-left: -0.5rem; border: 0.5rem solid transparent; border-top-color: #fff; border-bottom: 0; }
-  .name { font-family: var(--f-display); font-weight: 800; font-size: 2.2rem; line-height: 1; }
+  .name { font-family: var(--f-display); font-weight: 800; font-size: 2.2rem; line-height: 1; max-width: 100%; overflow-wrap: anywhere; }
   .lage { color: var(--sky-ink-soft); }
   .zu { margin-top: auto; width: 100%; }
   .was { padding: 1.3rem; display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }

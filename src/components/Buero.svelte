@@ -1,5 +1,6 @@
 <script>
   // Büro (für Erwachsene): Profile anlegen und ändern, Import/Export, Protokoll, Einstellungen
+  import { modal } from "../lib/modal.js";
   import Avatar from "./Avatar.svelte";
   import Sheep from "./Sheep.svelte";
   import Toggle from "./Toggle.svelte";
@@ -9,7 +10,7 @@
   import { FARBEN, WOLLE, exportDaten, pruefeImport, vorschau } from "../lib/profile-io.js";
   import { datumPlus, datumLang, istZeit, zeitpunktText } from "../lib/zeit.js";
   import { fotoVerkleinern, herunterladen } from "../lib/foto.js";
-  import { sag, canSpeak } from "../lib/sprechen.js";
+  import { sag, canSpeak } from "../lib/sprechen.svelte.js";
   import { nfc } from "../lib/nfc.svelte.js";
   import { STANDARD_PLAN, MAX_PUNKTE } from "../lib/tagesplan.js";
   import { STANDARD_ABHOLER, essenInfo, schlafInfo } from "../lib/tagebuch.js";
@@ -24,43 +25,63 @@
   let fehler = $state("");
   let gespeichert = $state(false);
   let loeschFrage = $state(false);
+  let speichert = $state(false);
+  let fotoLaedt = $state(false);
+  let fotoNummer = 0;
 
   function neu() {
     form = { id: null, rolle: "kind", name: "", bild: { art: "schaf", wert: "weiss" }, farbe: FARBEN[0], ueblicheZeit: "", notiz: "" };
-    fehler = ""; gespeichert = false; loeschFrage = false;
+    fehler = ""; gespeichert = false; loeschFrage = false; fotoLaedt = false;
   }
   function bearbeiten(p) {
     form = { ...$state.snapshot(p), ueblicheZeit: p.ueblicheZeit ?? "" };
-    fehler = ""; gespeichert = false; loeschFrage = false;
+    fehler = ""; gespeichert = false; loeschFrage = false; fotoLaedt = false;
   }
   async function speichern() {
+    if (speichert || fotoLaedt) return;
+    const ziel = form;
+    speichert = true;
     try {
-      const p = await kita.profilSpeichern($state.snapshot(form));
+      const p = await kita.profilSpeichern($state.snapshot(ziel));
+      if (form !== ziel) return;
       bearbeiten(p);
       gespeichert = true;
       setTimeout(() => (gespeichert = false), 2500);
     } catch (err) {
-      fehler = err.message;
+      if (form === ziel) fehler = err.message;
+    } finally {
+      speichert = false;
     }
   }
   async function loeschen() {
+    if (speichert) return;
     if (!loeschFrage) return (loeschFrage = true);
-    await kita.profilLoeschen(form.id);
-    form = null;
+    const ziel = form;
+    await kita.profilLoeschen(ziel.id);
+    if (form === ziel) form = null;
   }
   async function foto(ev) {
     const datei = ev.currentTarget.files?.[0];
     ev.currentTarget.value = "";
     if (!datei) return;
+    const ziel = form;
+    const nummer = ++fotoNummer;
+    const aktuell = () => form === ziel && nummer === fotoNummer;
+    fotoLaedt = true;
+    fehler = "";
     try {
-      form.bild = { art: "foto", wert: await fotoVerkleinern(datei) };
+      const wert = await fotoVerkleinern(datei);
+      if (aktuell()) ziel.bild = { art: "foto", wert };
     } catch {
-      fehler = "Das Bild konnte nicht gelesen werden";
+      if (aktuell()) fehler = "Das Bild konnte nicht gelesen werden";
+    } finally {
+      if (aktuell()) fotoLaedt = false;
     }
   }
 
   // ---------- Import und Export ----------
   let mitProtokoll = $state(false);
+  let importDatei = $state(null);
   let imp = $state(null); // { profile, tage, v } nach dem Einlesen, vor dem Übernehmen
   let impFehler = $state("");
   let impModus = $state("zusammenfuehren");
@@ -179,7 +200,7 @@
   }
 </script>
 
-<div class="buero">
+<dialog class="buero" aria-label="Büro" use:modal oncancel={(ev) => { ev.preventDefault(); onClose(); }}>
   <header>
     <Sheep size="2.6rem" />
     <div><b>Büro</b><small>Version {__APP_VERSION__}</small></div>
@@ -197,7 +218,8 @@
       <span class="spacer"></span>
       <label class="check"><input type="checkbox" bind:checked={mitProtokoll} /> mit Protokoll</label>
       <button class="big-btn light small" onclick={exportieren}>Exportieren</button>
-      <label class="big-btn light small">Importieren<input id="import-datei" type="file" accept=".json,application/json" hidden onchange={einlesen} /></label>
+      <button class="big-btn light small" onclick={() => importDatei.click()}>Importieren</button>
+      <input id="import-datei" type="file" accept=".json,application/json" hidden bind:this={importDatei} onchange={einlesen} />
     </div>
 
     {#if impFehler}<p class="meldung err" data-test="imp-fehler">Import nicht möglich: {impFehler}. Es wurde nichts geändert.</p>{/if}
@@ -207,10 +229,13 @@
         <b>Import-Vorschau:</b>
         <span data-test="imp-zahlen">{imp.v.neu.length} neu, {imp.v.geaendert.length} geändert, {imp.v.gleich.length} gleich</span>
         {#if imp.tage.length}<span>· {imp.tage.length} Protokollzeilen</span>{/if}
+        {#if imp.tage.some((e) => e.status === "da" && !e.abholzeit)}
+          <p class="hinweis">Bei Anwesenheitseinträgen ohne gültige Abholzeit zeigt die Übersicht „Abholzeit unbekannt“.</p>
+        {/if}
         {#if imp.tags.length}<span>· {imp.tags.length} NFC-Anhänger</span>{/if}
         <div class="modus">
-          <label><input type="radio" bind:group={impModus} value="zusammenfuehren" /> Zusammenführen (nichts wird gelöscht)</label>
-          <label><input type="radio" bind:group={impModus} value="ersetzen" /> Ersetzen{#if imp.v.fehlen.length}&nbsp;({imp.v.fehlen.length} vorhandene {imp.v.fehlen.length === 1 ? "Profil wird" : "Profile werden"} gelöscht: {imp.v.fehlen.map((p) => p.name).join(", ")}){/if}</label>
+          <label><input type="radio" bind:group={impModus} value="zusammenfuehren" /> Zusammenführen (vorhandene Protokolleinträge bleiben erhalten)</label>
+          <label><input type="radio" bind:group={impModus} value="ersetzen" /> Ersetzen (importierte Protokolleinträge haben Vorrang){#if imp.v.fehlen.length}&nbsp;({imp.v.fehlen.length} vorhandene {imp.v.fehlen.length === 1 ? "Profil wird" : "Profile werden"} gelöscht: {imp.v.fehlen.map((p) => p.name).join(", ")}){/if}</label>
         </div>
         <button class="big-btn small {impModus === 'ersetzen' ? 'rot' : ''}" onclick={uebernehmen}>{impModus === "ersetzen" ? "Alles ersetzen" : "Übernehmen"}</button>
         <button class="big-btn light small" onclick={() => (imp = null)}>Abbrechen</button>
@@ -281,11 +306,12 @@
           <input id="f-notiz" bind:value={form.notiz} maxlength="200" autocomplete="off" />
 
           <div class="aktionen">
-            <button class="big-btn small" type="submit">Speichern</button>
+            <button class="big-btn small" type="submit" disabled={speichert || fotoLaedt}>Speichern</button>
             {#if gespeichert}<span class="ok" data-test="gespeichert">Gespeichert</span>{/if}
+            {#if fotoLaedt}<span class="hinweis" role="status">Foto wird verarbeitet …</span>{/if}
             {#if fehler}<span class="err">{fehler}</span>{/if}
             <span class="spacer"></span>
-            {#if form.id}<button class="big-btn rot small" type="button" onclick={loeschen}>{loeschFrage ? "Wirklich löschen?" : "Löschen"}</button>{/if}
+            {#if form.id}<button class="big-btn rot small" type="button" disabled={speichert} onclick={loeschen}>{loeschFrage ? "Wirklich löschen?" : "Löschen"}</button>{/if}
           </div>
         </form>
       {:else}
@@ -439,10 +465,10 @@
       <p class="muted">Alle Daten bleiben auf diesem Gerät. Zum Übertragen oder Sichern: Profile → Exportieren.</p>
     </div>
   {/if}
-</div>
+</dialog>
 
 <style>
-  .buero { position: fixed; inset: 0; z-index: 30; background: var(--wool-2); overflow-y: auto; user-select: text; -webkit-user-select: text; padding-bottom: 2rem; }
+  .buero { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0 0 2rem; background: var(--wool-2); overflow-y: auto; user-select: text; -webkit-user-select: text; }
   header { display: flex; align-items: center; gap: 0.8rem; padding: 0.7rem 1.2rem; background: var(--sky); position: sticky; top: 0; z-index: 2; flex-wrap: wrap; }
   header b { font-family: var(--f-display); font-weight: 800; font-size: 1.6rem; display: block; line-height: 1; }
   header small { color: var(--ink-soft); font-size: 0.85rem; }
@@ -500,7 +526,7 @@
   @media (max-width: 760px) {
     .zwei { grid-template-columns: 1fr; padding: 0.8rem 0.7rem 0; }
     form.karte { grid-template-columns: 1fr; gap: 0.4rem; }
-    nav { margin: 0; order: 3; flex-basis: 100%; }
+    nav { margin: 0; order: 3; flex-basis: 100%; flex-wrap: wrap; }
     header > .big-btn { margin-left: auto; }
     .leiste { padding: 0.8rem 0.7rem 0; }
     .meldung, .einst, .leiste + .karte { margin: 0.8rem 0.7rem 0; }

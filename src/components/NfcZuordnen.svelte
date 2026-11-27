@@ -1,5 +1,6 @@
 <script>
   // Ein noch unbekannter NFC-Anhänger wurde hingehalten: Wem gehört er?
+  import { modal } from "../lib/modal.js";
   import Avatar from "./Avatar.svelte";
   import { kita } from "../lib/kita.svelte.js";
   import { pop, hallo } from "../lib/sounds.js";
@@ -14,10 +15,8 @@
   const hatTag = (id) => kita.tags.some((t) => t.profilId === id);
 </script>
 
-<svelte:window onkeydown={(ev) => ev.key === "Escape" && onClose()} />
-
-<div class="schleier" role="presentation" onclick={(ev) => ev.target === ev.currentTarget && onClose()}>
-  <div class="fenster" role="dialog" aria-modal="true" aria-label="Neuer Anhänger">
+<dialog class="schleier" aria-label="Neuer Anhänger" use:modal oncancel={(ev) => { ev.preventDefault(); onClose(); }} onclick={(ev) => ev.target === ev.currentTarget && onClose()}>
+  <div class="fenster">
     <h3><span class="emoji gross">🏷️</span> Neuer Anhänger! Wem gehört er?</h3>
     <div class="koepfe">
       {#each kita.profile as p (p.id)}
@@ -29,10 +28,9 @@
     </div>
     <div class="knoepfe"><button class="big-btn light" onclick={() => { pop(); onClose(); }}><span class="emoji">↩️</span> Niemandem</button></div>
   </div>
-</div>
+</dialog>
 
 <style>
-  .schleier { position: fixed; inset: 0; z-index: 25; background: rgba(42, 47, 38, 0.45); display: grid; place-items: center; padding: 1rem; }
   .fenster { width: min(46rem, 100%); max-height: 100%; overflow-y: auto; background: var(--wool); border-radius: 1.8rem; padding: 1.3rem; display: flex; flex-direction: column; gap: 0.9rem; box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.3); }
   h3 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 1.5rem; display: flex; gap: 0.6rem; align-items: center; }
   .gross { font-size: 2.4rem; }

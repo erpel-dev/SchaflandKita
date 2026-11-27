@@ -1,6 +1,7 @@
 // Browser-Test für Schafland Kita. Aufruf: npm run test:e2e
 // Startet "vite preview" mit dist/ und spielt einen Kita-Tag in Chromium durch, mit gestellter Uhr.
 import { chromium } from "playwright";
+import { regression } from "./regression.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -298,7 +299,7 @@ try {
   await shot("18-nfc-buero");
   await page.locator('tr[data-tag="04:bb:02"]').getByRole("button", { name: "Aufheben" }).click();
   await eq("Büro: Zuordnung aufheben", async () => page.locator("tr[data-tag]").count(), 1);
-  check("Im Büro löst der Anhänger keine An- oder Abmeldung aus", await page.getByRole("dialog").count() === 0);
+  check("Im Büro löst der Anhänger keine An- oder Abmeldung aus", await page.getByRole("dialog", { name: "Büro" }).count() === 1 && await page.locator("dialog.schleier[open]").count() === 0);
   await page.getByRole("button", { name: "Schließen" }).click();
   await halten("04:aa:01");
   check("Geänderter Anhänger gehört jetzt Erpel", await sichtbar(dlg.getByRole("button", { name: "Feierabend" })) && (await dlg.locator(".name").textContent()) === "Erpel");
@@ -451,6 +452,7 @@ try {
   check("Ohne Aktion: kein Kostüm, kein Banner", await page.locator('[data-test="aktion"]').count() === 0 && await page.locator('.brand svg ellipse[fill="#ef7a1a"]').count() === 0);
 
   check("Keine Fehler in der Konsole", errors.length === 0, errors.join(" | "));
+  await regression(browser, URL_APP, check);
 } catch (err) {
   check("Testlauf ohne Abbruch", false, String(err).split("\n").slice(0, 6).join(" "));
 } finally {
