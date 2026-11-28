@@ -1,6 +1,7 @@
 <script>
   // Läusealarm: ein paar Läuse krabbeln über den Bildschirm. Antippen verscheucht sie: Die Laus flitzt
   // vom Finger weg und wird dann wieder langsam. Der Tipp auf eine Laus öffnet nichts darunter.
+  // Eine Wischgeste, die auf einer Laus beginnt, scrollt dagegen die Seite darunter.
   // Bei „Bewegung reduzieren“ sitzen sie still; eine angetippte Laus springt dann an eine andere Stelle.
   import Laus from "./Laus.svelte";
   import { pop } from "../lib/sounds.js";
@@ -39,10 +40,50 @@
     el.classList.toggle("flieht", l.flucht > 0);
   }
 
-  /** Eine Laus wurde angetippt: weg vom Finger, so schnell es geht. */
-  function scheuchen(i, ev) {
+  // ---------- Tippen oder Wischen ----------
+  const WISCH_PX = 8; // ab so viel Bewegung ist es kein Tipp mehr
+  let geste = null; // { i, id, x, y, letzteY, letzteX, wischt, ziel }
+
+  /** Das Element unter dem Punkt (an den Läusen vorbei), das in dieser Richtung scrollen kann. */
+  function scrollZiel(x, y, senkrecht) {
+    const unter = document.elementsFromPoint(x, y).find((e) => !feld.contains(e));
+    for (let e = unter; e && e !== document.documentElement; e = e.parentElement) {
+      const stil = getComputedStyle(e);
+      const kann = senkrecht
+        ? /(auto|scroll)/.test(stil.overflowY) && e.scrollHeight > e.clientHeight
+        : /(auto|scroll)/.test(stil.overflowX) && e.scrollWidth > e.clientWidth;
+      if (kann) return e;
+    }
+    return document.scrollingElement;
+  }
+  function runter(i, ev) {
     ev.preventDefault();
     ev.stopPropagation();
+    ev.currentTarget.setPointerCapture?.(ev.pointerId);
+    geste = { i, id: ev.pointerId, x: ev.clientX, y: ev.clientY, letzteX: ev.clientX, letzteY: ev.clientY, wischt: false, ziel: null };
+  }
+  function bewegt(ev) {
+    if (!geste || ev.pointerId !== geste.id) return;
+    if (!geste.wischt && Math.hypot(ev.clientX - geste.x, ev.clientY - geste.y) > WISCH_PX) {
+      geste.wischt = true;
+      geste.ziel = scrollZiel(geste.x, geste.y, Math.abs(ev.clientY - geste.y) >= Math.abs(ev.clientX - geste.x));
+    }
+    if (geste.wischt) geste.ziel?.scrollBy(geste.letzteX - ev.clientX, geste.letzteY - ev.clientY);
+    geste.letzteX = ev.clientX;
+    geste.letzteY = ev.clientY;
+  }
+  function hoch(ev) {
+    if (!geste || ev.pointerId !== geste.id) return;
+    const { i, x, y, wischt } = geste;
+    geste = null;
+    if (!wischt) scheuchen(i, x, y);
+  }
+  function abbruch(ev) {
+    if (geste?.id === ev.pointerId) geste = null;
+  }
+
+  /** Eine Laus wurde angetippt (an x, y): weg vom Finger, so schnell es geht. */
+  function scheuchen(i, x, y) {
     const l = laeuse[i];
     pop();
     if (still) {
@@ -53,7 +94,7 @@
       return;
     }
     const box = elemente[i].getBoundingClientRect();
-    const dx = box.left + box.width / 2 - ev.clientX, dy = box.top + box.height / 2 - ev.clientY;
+    const dx = box.left + box.width / 2 - x, dy = box.top + box.height / 2 - y;
     // Krabbelrichtung ist (sin w, −cos w); weg vom Finger, mit etwas Zufall
     l.winkel = Math.atan2(dx || Math.random() - 0.5, -(dy || Math.random() - 0.5)) + (Math.random() - 0.5) * 0.6;
     l.pause = 0;
@@ -102,7 +143,7 @@
 
 <div class="laeuse" bind:this={feld} aria-hidden="true" data-test="laeuse">
   {#each laeuse as l, i (i)}
-    <div class="krabbler" bind:this={elemente[i]} onpointerdown={(ev) => scheuchen(i, ev)}><Laus size="{l.groesse}rem" tippeln={!still} /></div>
+    <div class="krabbler" bind:this={elemente[i]} onpointerdown={(ev) => runter(i, ev)} onpointermove={bewegt} onpointerup={hoch} onpointercancel={abbruch}><Laus size="{l.groesse}rem" tippeln={!still} /></div>
   {/each}
 </div>
 
