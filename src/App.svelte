@@ -7,6 +7,7 @@
   import ProfilFenster from "./components/ProfilFenster.svelte";
   import Buero from "./components/Buero.svelte";
   import NfcZuordnen from "./components/NfcZuordnen.svelte";
+  import Laeuse from "./components/Laeuse.svelte";
   import { nfc } from "./lib/nfc.svelte.js";
   import { settings } from "./lib/settings.svelte.js";
   import { sortierePlan, planStand } from "./lib/tagesplan.js";
@@ -98,6 +99,7 @@
 
   $effect(() => kita.beobachteTag(kita.datum));
   $effect(() => kita.beobachteNachrichten());
+  $effect(() => kita.beobachteLaeuse());
 
   // Uhr: Abholzeiten, Wartezeiten und der Tageswechsel um Mitternacht hängen daran
   $effect(() => {
@@ -163,6 +165,7 @@
   {/if}
   <div use:hinweisImVordergrund={hinweis}></div>
 {/if}
+{#if settings.value.aktion === "laeusealarm"}<Laeuse />{/if}
 
 <style>
   .app { height: 100%; display: flex; flex-direction: column; }

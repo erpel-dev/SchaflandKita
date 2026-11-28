@@ -74,6 +74,9 @@ input, select { font: inherit; color: inherit; }
 
 /* Zustandsfarbe „da“: bleibt in jeder Aktion grün, damit sie nie mit „krank“ verwechselt wird */
 :root { --da: #6cae4f; --da-dark: #3f7a2c; --da-bg: #f0f8ea; }
+/* Zustandsfarbe „Läuse“: Lila, damit sie weder mit „krank“ noch mit „da“ verwechselt wird */
+:root { --laus: #9b7bd1; --laus-dark: #6c4fa3; --laus-bg: #f5f0fc; }
+.big-btn.laus { background: var(--laus); color: #fff; box-shadow: 0 0.25rem 0 var(--laus-dark); }
 
 /* ---------- Aktion: Sommerfest ---------- */
 /* Strahlender Sommertag: kräftig blauer Himmel, der zur Wiese hin sonnengelb wird */
@@ -118,4 +121,18 @@ input, select { font: inherit; color: inherit; }
   --sun: #ffcf3f;
   --meadow: #f4f8fc;
   --ok-bg: #fdecec;
+}
+
+/* ---------- Aktion: Läusealarm ---------- */
+/* Frisch gewaschen: Minz-Himmel mit Seifenblasen, Türkis statt Wiesengrün */
+:root[data-aktion="laeusealarm"] {
+  --wool: #f8fdfb;
+  --wool-2: #e7f4ef;
+  --wool-line: #cfe6dd;
+  --grass: #2a9d8f;
+  --grass-dark: #1d6f65;
+  --sky: #b9ece2;
+  --sky-bottom: #eefbf7;
+  --meadow: #6cc4a1;
+  --ok-bg: #e2f5f0;
 }

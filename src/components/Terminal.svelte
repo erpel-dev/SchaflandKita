@@ -1,6 +1,7 @@
 <script>
   // Startseite: alle Profile als große Kacheln, sortiert nach ihrem Zustand
   import Avatar from "./Avatar.svelte";
+  import Laus from "./Laus.svelte";
   import { kita } from "../lib/kita.svelte.js";
   import { istZeit, warteInfo } from "../lib/zeit.js";
   import { settings } from "../lib/settings.svelte.js";
@@ -22,7 +23,7 @@
   const BEREICHE = [
     { id: "offen", bild: "🚪", titel: "Noch nicht da", status: ["offen"] },
     { id: "da", bild: "🏫", titel: "Im Kindergarten", status: ["da"], leer: "Noch niemand da" },
-    { id: "fehlt", bild: "🤒", titel: "Krank oder nicht da", status: ["krank", "abwesend"] },
+    { id: "fehlt", bild: "🤒", titel: "Krank oder nicht da", status: ["krank", "abwesend", "laeuse"] },
     { id: "abgeholt", bild: "🏠", titel: "Schon zu Hause", status: ["abgeholt"] },
   ];
 
@@ -66,7 +67,9 @@
                 {#if st === "da"}<span class="emoji">{spaet ? "⏰" : "🕒"}</span> {istZeit(e.abholzeit) ? e.abholzeit : "–"}
                 {:else if st === "krank"}<span class="emoji">🤒</span> krank
                 {:else if st === "abwesend"}<span class="emoji">🏖️</span> nicht da
+                {:else if st === "laeuse"}<Laus size="1.3rem" /> Läuse
                 {:else if st === "abgeholt"}<span class="emoji">👋</span> {e.gegangenUm ?? ""}
+                {:else if kita.brauchtLaeuseCheck(p.id)}<span class="emoji">🔍</span> Läuse-Check
                 {:else}&nbsp;{/if}
               </span>
             </button>
@@ -104,7 +107,7 @@
   }
   .kachel:active { transform: translateY(0.2rem); box-shadow: 0 0.1rem 0 var(--wool-line); }
   .kachel b { font-family: var(--f-display); font-weight: 800; font-size: 1.35rem; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .info { font-weight: 800; font-size: 1.05rem; color: var(--ink-soft); min-height: 1.4rem; font-variant-numeric: tabular-nums; }
+  .info { display: inline-flex; align-items: center; gap: 0.25rem; font-weight: 800; font-size: 1.05rem; color: var(--ink-soft); min-height: 1.4rem; font-variant-numeric: tabular-nums; }
   .rolle { position: absolute; top: 0.4rem; right: 0.5rem; font-size: 1.3rem; }
   .kachel.da { border-color: var(--da); box-shadow: 0 0.3rem 0 var(--da-dark); background: var(--da-bg); }
   .kachel.da .info { color: var(--da-dark); }
@@ -112,6 +115,8 @@
   .kachel.da.spaet .info { color: #8a6500; }
   .kachel.da.spaet .info .emoji { display: inline-block; animation: wackeln 1s ease-in-out infinite; }
   .kachel.krank { border-color: var(--nose); box-shadow: 0 0.3rem 0 #d4788a; background: #fdf0f2; }
+  .kachel.laeuse { border-color: var(--laus); box-shadow: 0 0.3rem 0 var(--laus-dark); background: var(--laus-bg); }
+  .kachel.laeuse .info, .kachel.offen .info { color: var(--laus-dark); }
   .kachel.abwesend, .kachel.abgeholt { background: var(--wool-2); }
   .kachel.abwesend :global(.avatar), .kachel.abgeholt :global(.avatar) { opacity: 0.6; }
   @keyframes wackeln { 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }

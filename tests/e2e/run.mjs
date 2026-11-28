@@ -430,7 +430,7 @@ try {
 
   // ---------- Aktionen ----------
   await page.setViewportSize({ width: 1366, height: 768 });
-  for (const [label, id, text] of [["🎪 Sommerfest", "sommerfest", "Heute ist Sommerfest!"], ["🎃 Kürbisfest", "kuerbisfest", "Heute ist Kürbisfest!"], ["🎄 Weihnachtsmarkt", "weihnachtsmarkt", "Heute ist Weihnachtsmarkt!"]]) {
+  for (const [label, id, text] of [["🎪 Sommerfest", "sommerfest", "Heute ist Sommerfest!"], ["🎃 Kürbisfest", "kuerbisfest", "Heute ist Kürbisfest!"], ["🎄 Weihnachtsmarkt", "weihnachtsmarkt", "Heute ist Weihnachtsmarkt!"], ["🔍 Läusealarm", "laeusealarm", "Heute ist Läusealarm!"]]) {
     await page.keyboard.press("Control+,");
     await page.locator(".buero").getByRole("button", { name: "Einstellungen" }).click();
     await page.locator("#s-aktion").selectOption({ label });
@@ -444,12 +444,67 @@ try {
     await shot(`21-${id}-start`);
     await page.getByRole("button", { name: "Kita öffnen" }).click();
   }
+
+  // ---------- Läusealarm (Aktion ist noch aktiv) ----------
+  await eq("Läusealarm: sechs Läuse krabbeln", async () => page.locator('[data-test="laeuse"] .krabbler').count(), 6);
+  const lagen = () => page.locator('[data-test="laeuse"] .krabbler').evaluateAll((els) => els.map((e) => e.style.transform).join("|"));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const ruhig = await lagen();
+  await page.clock.runFor(1500);
+  check("Bewegung reduzieren: Läuse sitzen sofort still", (await lagen()) === ruhig);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.clock.runFor(1500);
+  check("… und krabbeln danach weiter", (await lagen()) !== ruhig);
+  check("Läusealarm: Schafe tragen die Duschhaube", await page.locator('.brand svg path[fill="#8fd6f5"]').count() === 1);
+  await kachel("Erpelküken").click(); // klappt nur, wenn die Läuse keine Tipps abfangen
+  await dlg.getByRole("button", { name: "Hat Läuse" }).click();
+  check("Läuse melden kündigt den Check an", await sichtbar(dlg.getByText("Beim Wiederkommen wird zuerst nachgeschaut")));
+  await shot("22-laeuse-melden");
+  await dlg.getByRole("button", { name: "Läuse melden" }).click();
+  await dlg.waitFor({ state: "hidden" });
+  check("Läuse: Kachel steht bei den Fehlenden", (await namen("fehlt")).includes("Erpelküken"));
+  await eq("Läuse: Kachel zeigt die Laus", async () => (await kachel("Erpelküken").locator(".info").textContent()).trim(), "Läuse");
+  await kachel("Erpelküken").click();
+  check("Läuse: kein „Wieder gesund“", await dlg.getByRole("button", { name: "Wieder gesund" }).count() === 0);
+  await dlg.getByRole("button", { name: "Keine Läuse mehr?" }).click();
+  const keineLaeuse = dlg.getByRole("button", { name: "Ja, keine Läuse mehr" });
+  check("Läuse-Check: ohne Haken gesperrt", await keineLaeuse.isDisabled());
+  await dlg.getByRole("button", { name: /gewaschen/ }).click();
+  check("Läuse-Check: ein Haken reicht nicht", await keineLaeuse.isDisabled());
+  await dlg.getByRole("button", { name: /Ausgekämmt/ }).click();
+  await shot("23-laeuse-check");
+  await keineLaeuse.click();
+  check("Läuse-Check bestanden: jetzt anmelden", await sichtbar(dlg.locator('[data-test="laeuse-frei"]')) && await sichtbar(dlg.getByRole("button", { name: "Anmelden" })));
+  await dlg.getByRole("button", { name: "Anmelden" }).click();
+  await dlg.waitFor({ state: "hidden" });
+  check("Nach dem Läuse-Check angemeldet", (await namen("da")).includes("Erpelküken"));
+  // Meldung läuft ab, der Check bleibt fällig
+  await kachel("Wolli").click();
+  await dlg.getByRole("button", { name: "Hat Läuse" }).click();
+  await dlg.getByRole("button", { name: "Läuse melden" }).click();
+  await dlg.waitFor({ state: "hidden" });
+  await page.clock.fastForward("24:00:00"); // Mittwoch
+  await page.locator('.uhr:has-text("Mittwoch")').waitFor();
+  await eq("Abgelaufene Läuse-Meldung: Kachel will den Check", async () => (await kachel("Wolli").locator(".info").textContent()).trim(), "🔍 Läuse-Check");
+  await kachel("Wolli").click();
+  check("Ohne Check kein Anmelden", await sichtbar(dlg.locator('[data-test="laeuse-hinweis"]')) && await dlg.getByRole("button", { name: "Anmelden" }).count() === 0);
+  await shot("24-laeuse-check-faellig");
+  await dlg.getByRole("button", { name: "Läuse-Check" }).click();
+  await dlg.getByRole("button", { name: "Doch noch Läuse" }).click();
+  check("„Doch noch Läuse“ führt zum neuen Melden", await sichtbar(dlg.getByRole("button", { name: "Läuse melden" })));
+  await dlg.getByRole("button", { name: "Doch nicht" }).click();
+  await dlg.getByRole("button", { name: "Zurück" }).click();
+
   await page.keyboard.press("Control+,");
   await page.locator(".buero").getByRole("button", { name: "Einstellungen" }).click();
   await page.locator("#s-aktion").selectOption({ label: "Keine Aktion" });
   await eq("Ohne Aktion: normales Farbschema", async () => page.evaluate(() => document.documentElement.dataset.aktion ?? null), null);
   await page.getByRole("button", { name: "Schließen" }).click();
   check("Ohne Aktion: kein Kostüm, kein Banner", await page.locator('[data-test="aktion"]').count() === 0 && await page.locator('.brand svg ellipse[fill="#ef7a1a"]').count() === 0);
+  check("Ohne Aktion: keine Läuse", await page.locator('[data-test="laeuse"]').count() === 0);
+  await kachel("Wolli").click();
+  check("Ohne Aktion: kein „Hat Läuse“, aber der Check bleibt fällig", await dlg.getByRole("button", { name: "Hat Läuse" }).count() === 0 && await sichtbar(dlg.getByRole("button", { name: "Läuse-Check" })));
+  await dlg.getByRole("button", { name: "Zurück" }).click();
 
   check("Keine Fehler in der Konsole", errors.length === 0, errors.join(" | "));
   await regression(browser, URL_APP, check);

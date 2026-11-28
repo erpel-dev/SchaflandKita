@@ -15,6 +15,7 @@ Spiel-Terminal für den Kuscheltier-Kindergarten, gedacht für Kinder von 4 bis 
 | Tagesplan | Bilderleiste oben auf der Startseite; der laufende Punkt ist hervorgehoben, und das Schaf sagt an, wenn ein neuer beginnt. Einen Punkt antippen liest vor, wann er dran ist |
 | Essen und Schlafen | In der Übersicht je Tier ein Bildchen antippen (alles / ein bisschen / nichts gegessen, geschlafen / kurz / nicht). Noch einmal antippen nimmt es zurück |
 | Krank / nicht da | Kachel antippen → „Krank“ oder „Nicht da“ → nur heute oder mit Plus bis zu 14 weitere Tage → melden |
+| Läuse (nur bei Läusealarm) | Kachel antippen → „Hat Läuse“ → Dauer wie bei „Krank“ → „Läuse melden“. Zurück geht es nur über den Läuse-Check: „Keine Läuse mehr?“ → beide Punkte abhaken („gewaschen“, „ausgekämmt“) → „Ja, keine Läuse mehr“. Ist die Meldung schon abgelaufen, zeigt die Kachel „Läuse-Check“, und Anmelden geht erst danach, auch nicht per Anhänger |
 | Zurücknehmen | Kachel antippen → „Wieder gesund“, „Doch da“, „Wieder da“ oder „Doch noch nicht da“ |
 | Pinnwand | Knopf oben rechts: Erzieher schreiben Nachrichten für alle („Nachricht schreiben“ → wer schreibt → Text, auf Wunsch ein großes Bild). Jeder reagiert mit einem Bildchen: Bildchen antippen → „Wer bist du?“ → eigenes Profil antippen. Noch einmal dasselbe nimmt die Reaktion zurück. Die Zahl am Knopf zeigt neue Nachrichten |
 | NFC-Anhänger | Neuen Anhänger ans Gerät halten → „Wem gehört er?“ → Profil antippen. Danach öffnet der Anhänger das Fenster seines Profils; noch einmal hinhalten meldet an (mit der vorgewählten Zeit) bzw. ab. Geht mit Chrome auf Android-Geräten mit NFC; beim ersten „Kita öffnen“ fragt Chrome einmal nach der Erlaubnis |
@@ -42,8 +43,9 @@ Im Büro unter Einstellungen → Aktion lässt sich ein besonderer Tag einschalt
 | Sommerfest | sonniger Himmel mit Wimpelkette, Sonnenbrille und Partyhut |
 | Kürbisfest | Herbsthimmel mit fallenden Blättern, Kürbis-Orange, Kürbishut |
 | Weihnachtsmarkt | Winterabend mit Lichterkette und Schnee, Weihnachtsrot, Weihnachtsmütze |
+| Läusealarm | Minz-Himmel mit Seifenblasen, sechs krabbelnde Läuse (fangen keine Tipps ab), Duschhaube, dazu „Hat Läuse“ im Fenster |
 
-Die Farbe für „da“ bleibt in jeder Aktion grün, damit sie nicht mit „krank“ verwechselt wird.
+Die Farbe für „da“ bleibt in jeder Aktion grün, damit sie nicht mit „krank“ verwechselt wird. „Läuse“ ist immer lila. Wird der Läusealarm ausgeschaltet, bleiben laufende Läuse-Meldungen und fällige Läuse-Checks bestehen.
 
 Beim ersten Start gibt es sieben Beispielprofile (`src/lib/beispiele.js`): die Erzieher Erpel, Manfred, Lola und Eichel, die Kinder Wolli, Scheepi und Erpelküken.
 

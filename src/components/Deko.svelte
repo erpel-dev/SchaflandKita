@@ -38,6 +38,10 @@
           </g>
         </svg>
       {/each}
+    {:else if aktion === "laeusealarm"}
+      {#each bahnen as [x, delay, size, dur], i (i)}
+        <span class="seifenblase" style:left="{x}%" style:width="{size * 1.2}rem" style:height="{size * 1.2}rem" style:animation-delay="-{delay}s" style:animation-duration="{dur * 1.4}s"></span>
+      {/each}
     {/if}
   </div>
 {/if}
@@ -62,5 +66,18 @@
   /* in der Kopfzeile nur die Kopfzeile hinunter */
   .deko:not(.big) .fall { animation-name: fall-klein; }
   @keyframes fall-klein { to { transform: translateY(6rem) rotate(120deg); } }
-  @media (prefers-reduced-motion: reduce) { .fall { animation: none; top: 30%; } .sonne { animation: none; } }
+  /* Seifenblasen steigen vom unteren Rand auf */
+  .seifenblase {
+    position: absolute; bottom: -2.5rem; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.95);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95) 0 12%, rgba(255, 255, 255, 0.25) 13% 60%, rgba(160, 220, 255, 0.35) 100%);
+    animation: steigen linear infinite;
+  }
+  @keyframes steigen {
+    from { transform: translateY(0); }
+    50% { transform: translate(0.8rem, -50vh); }
+    to { transform: translate(-0.4rem, -105vh); }
+  }
+  .deko:not(.big) .seifenblase { animation-name: steigen-klein; }
+  @keyframes steigen-klein { to { transform: translate(0.4rem, -6.5rem); } }
+  @media (prefers-reduced-motion: reduce) { .fall { animation: none; top: 30%; } .sonne { animation: none; } .seifenblase { animation: none; bottom: 20%; } }
 </style>

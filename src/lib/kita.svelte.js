@@ -1,4 +1,4 @@
-// Der Zustand der Kita: alle Profile und wer heute da, abgeholt, krank oder abwesend ist.
+// Der Zustand der Kita: alle Profile und wer heute da, abgeholt, krank, abwesend oder mit Läusen zu Hause ist.
 import { liveQuery } from "dexie";
 import { db, kvGet, kvSet } from "./db.js";
 import { datumStr, zeitStr, tageVonBis } from "./zeit.js";
@@ -8,6 +8,21 @@ import { tagId } from "./nfc.svelte.js";
 import { ESSEN, SCHLAF, abholerSauber } from "./tagebuch.js";
 import { BEISPIELE } from "./beispiele.js";
 
+const MELDUNGEN = ["krank", "abwesend", "laeuse"];
+const LAEUSE_KEY = "laeuseCheck";
+// Fällige Läuse-Checks liegen in kv. Immer innerhalb einer Transaktion mit db.kv lesen und ändern,
+// damit zwei offene Tabs sich nicht gegenseitig überschreiben.
+const laeuseListe = async () => {
+  const wert = (await db.kv.get(LAEUSE_KEY))?.value;
+  return Array.isArray(wert) ? wert.filter((id) => typeof id === "string") : [];
+};
+async function laeuseAendern(id, offen) {
+  const ohne = (await laeuseListe()).filter((x) => x !== id);
+  const neu = offen ? [...ohne, id] : ohne;
+  await db.kv.put({ key: LAEUSE_KEY, value: neu });
+  return neu;
+}
+
 class Kita {
   profile = $state([]);
   /** Einträge von heute: profilId → { status, gekommenUm, abholzeit, gegangenUm, meldungBis } */
@@ -16,6 +31,8 @@ class Kita {
   tags = $state([]);
   /** Pinnwand, neueste zuerst */
   nachrichten = $state([]);
+  /** Wer Läuse hatte, muss vor dem nächsten Anmelden den Läuse-Check bestehen: ids der Profile */
+  laeuseCheck = $state([]);
   /** Bis hierhin wurde die Pinnwand schon angesehen (für den Zähler neuer Nachrichten) */
   gesehenBis = $state("");
   ungelesen = $derived(this.nachrichten.filter((n) => n.erstelltAm > this.gesehenBis).length);
@@ -37,12 +54,21 @@ class Kita {
     this.nachrichten = (await db.nachrichten.toArray()).sort((a, b) => b.erstelltAm.localeCompare(a.erstelltAm));
     this.gesehenBis = await kvGet("pinnwandGesehen", "");
     this.tags = await db.tags.toArray();
+    this.laeuseCheck = await laeuseListe();
     await this.#tagLaden();
   }
 
   beobachteTag(datum) {
     const abo = liveQuery(() => db.tage.where("datum").equals(datum).toArray()).subscribe((rows) => {
       if (this.datum === datum) this.heute = Object.fromEntries(rows.map((r) => [r.profilId, r]));
+    });
+    return () => abo.unsubscribe();
+  }
+
+  /** Fällige Läuse-Checks, auch wenn ein anderer Tab sie ändert. */
+  beobachteLaeuse() {
+    const abo = liveQuery(() => db.kv.get(LAEUSE_KEY)).subscribe((row) => {
+      this.laeuseCheck = Array.isArray(row?.value) ? row.value : [];
     });
     return () => abo.unsubscribe();
   }
@@ -86,10 +112,11 @@ class Kita {
     return this.profile.find((p) => p.id === id) ?? null;
   }
 
-  async #setze(id, status, patch) {
+  async #setze(id, status, patch, { ohneLaeuse = false } = {}) {
     const datum = this.datum;
-    const eintrag = await db.transaction("rw", db.tage, db.profile, async () => {
+    const eintrag = await db.transaction("rw", db.tage, db.profile, db.kv, async () => {
       if (!(await db.profile.get(id))) return null;
+      if (ohneLaeuse && (await laeuseListe()).includes(id)) return null;
       const alt = await db.tage.get([id, datum]);
       if (!status.includes(alt?.status ?? "offen")) return null;
       const neu = {
@@ -103,9 +130,9 @@ class Kita {
     return !!eintrag;
   }
 
-  /** Bringen: anmelden mit Abholzeit (bei Erziehern: Dienstende). */
+  /** Bringen: anmelden mit Abholzeit (bei Erziehern: Dienstende). Nach Läusen erst nach dem Läuse-Check. */
   anmelden(id, abholzeit) {
-    return this.#setze(id, ["offen"], { status: "da", gekommenUm: this.uhrzeit, abholzeit, gegangenUm: null, meldungBis: null });
+    return this.#setze(id, ["offen"], { status: "da", gekommenUm: this.uhrzeit, abholzeit, gegangenUm: null, meldungBis: null }, { ohneLaeuse: true });
   }
   zeitAendern(id, abholzeit) {
     return this.#setze(id, ["da"], { abholzeit });
@@ -135,22 +162,45 @@ class Kita {
     return this.#setze(id, ["abgeholt"], { status: "da", gegangenUm: null, abgeholtVon: null, abgeholtVonBild: null, nichtAbgeholt: false });
   }
 
-  /** Krank oder abwesend melden, heute oder bis einschließlich "bis". */
+  /** Krank, abwesend oder mit Läusen melden, heute oder bis einschließlich "bis". */
   async melden(id, status, bis = this.datum) {
-    if (status !== "krank" && status !== "abwesend") throw new Error("unbekannte Meldung");
+    if (!MELDUNGEN.includes(status)) throw new Error("unbekannte Meldung");
     const heute = this.datum;
     const tage = tageVonBis(heute, bis < heute ? heute : bis);
     const letzter = tage.at(-1);
     const eintraege = tage.map((datum) => ({ profilId: id, datum, status, gekommenUm: null, abholzeit: null, gegangenUm: null, meldungBis: letzter }));
-    const gespeichert = await db.transaction("rw", db.tage, db.profile, async () => {
+    const gespeichert = await db.transaction("rw", db.tage, db.profile, db.kv, async () => {
       if (!(await db.profile.get(id))) return false;
       const alt = await db.tage.get([id, heute]);
       if (alt && alt.status !== "offen") return false;
       await db.tage.bulkPut(eintraege);
+      if (status === "laeuse") this.laeuseCheck = await laeuseAendern(id, true);
       return true;
     });
     if (gespeichert && this.datum === heute) this.heute = { ...this.heute, [id]: eintraege[0] };
     return gespeichert;
+  }
+
+  // ---------- Läuse ----------
+
+  brauchtLaeuseCheck(id) {
+    return this.laeuseCheck.includes(id);
+  }
+  /** Läuse-Check bestanden: die Markierung fällt weg, eine laufende Läuse-Meldung endet ab heute. */
+  async laeuseFrei(id) {
+    const datum = this.datum;
+    const beendet = await db.transaction("rw", db.tage, db.kv, async () => {
+      this.laeuseCheck = await laeuseAendern(id, false);
+      const alt = await db.tage.get([id, datum]);
+      if (alt?.status !== "laeuse") return false;
+      await db.tage.where("profilId").equals(id).and((e) => e.datum >= datum && e.status === "laeuse").delete();
+      return true;
+    });
+    if (beendet && this.datum === datum) {
+      const { [id]: _, ...rest } = this.heute;
+      this.heute = rest;
+    }
+    return true;
   }
 
   /** Meldung oder Anmeldung zurücknehmen: zurück auf „noch nicht da“. Mehrtägige Meldungen enden ganz. */
@@ -160,7 +210,7 @@ class Kita {
     const geloescht = await db.transaction("rw", db.tage, async () => {
       const alt = await db.tage.get([id, datum]);
       if (!alt || alt.status !== erwartet) return false;
-      if (alt.status === "krank" || alt.status === "abwesend") {
+      if (MELDUNGEN.includes(alt.status)) {
         await db.tage.where("profilId").equals(id)
           .and((e) => e.datum >= datum && e.datum <= (alt.meldungBis ?? datum) && e.status === alt.status)
           .delete();
@@ -184,8 +234,9 @@ class Kita {
   }
 
   async profilLoeschen(id) {
-    await db.transaction("rw", db.profile, db.tage, db.tags, db.nachrichten, async () => {
+    await db.transaction("rw", db.profile, db.tage, db.tags, db.nachrichten, db.kv, async () => {
       await db.profile.delete(id);
+      this.laeuseCheck = await laeuseAendern(id, false);
       await db.tage.where("profilId").equals(id).delete();
       await db.tags.where("profilId").equals(id).delete();
       // Nachrichten bleiben mit dem Autorennamen stehen.
@@ -267,13 +318,15 @@ class Kita {
     await kvSet("pinnwandGesehen", this.gesehenBis);
   }
 
-  /** Geprüfte Profile (aus pruefeImport) übernehmen. modus: "zusammenfuehren" | "ersetzen" */
-  async importieren(profile, modus = "zusammenfuehren", tage = [], tags = []) {
+  /** Geprüfte Profile (aus pruefeImport) übernehmen. modus: "zusammenfuehren" | "ersetzen".
+   *  laeuseCheck: ids mit fälligem Läuse-Check aus der Datei; beim Zusammenführen kommen sie dazu. */
+  async importieren(profile, modus = "zusammenfuehren", tage = [], tags = [], laeuseCheck = []) {
     const neueProfile = $state.snapshot(profile);
     const neueTage = $state.snapshot(tage);
     const neueTags = $state.snapshot(tags);
     const zeit = this.jetzt.toISOString();
-    const liste = await db.transaction("rw", db.profile, db.tage, db.tags, async () => {
+    const neueChecks = $state.snapshot(laeuseCheck);
+    const liste = await db.transaction("rw", db.profile, db.tage, db.tags, db.kv, async () => {
       const liste = zusammenfuehren(await db.profile.toArray(), neueProfile, modus);
       const ids = new Set(liste.map((p) => p.id));
       if (modus === "ersetzen") {
@@ -287,6 +340,9 @@ class Kita {
         await db.tage.bulkPut(neueTage.filter((_, i) => !belegt[i]));
       }
       if (neueTags.length) await db.tags.bulkPut(neueTags.map((t) => ({ id: t.id, profilId: t.profilId, zugeordnetAm: zeit })));
+      const checks = new Set([...(modus === "ersetzen" ? [] : await laeuseListe()), ...neueChecks].filter((id) => ids.has(id)));
+      await db.kv.put({ key: LAEUSE_KEY, value: [...checks] });
+      this.laeuseCheck = [...checks];
       return liste;
     });
     this.profile = sortiereProfile(liste);

@@ -9,7 +9,7 @@ export const ROLLEN = ["kind", "erzieher"];
 export const BILD_ARTEN = ["emoji", "schaf", "foto"];
 export const WOLLE = ["weiss", "braun", "schwarz", "grau", "rosa"];
 export const FARBEN = ["#cfe8f7", "#d8efc9", "#ffe9a8", "#fbd0d8", "#e3d6f5", "#ffd9b8", "#f3efe4"];
-export const STATUS = ["offen", "da", "abgeholt", "krank", "abwesend"];
+export const STATUS = ["offen", "da", "abgeholt", "krank", "abwesend", "laeuse"];
 const MAX_NAME = 30;
 const MAX_NOTIZ = 200;
 const MAX_FOTO = 400_000; // Zeichen einer data:-URL; ein 512-px-JPEG liegt weit darunter
@@ -66,9 +66,13 @@ function normalisiereTag(roh, ids) {
 }
 
 /** Inhalt der Export-Datei. tage (das Protokoll) ist optional; tags sind die NFC-Anhänger. */
-export function exportDaten(profile, { tage = null, tags = [], jetzt = new Date() } = {}) {
+export function exportDaten(profile, { tage = null, tags = [], laeuseCheck = [], jetzt = new Date() } = {}) {
   const daten = { format: FORMAT, version: VERSION, exportiertAm: jetzt.toISOString(), profile: profile.map((p) => ({ ...p })) };
   if (tags.length) daten.tags = tags.map((t) => ({ id: t.id, profilId: t.profilId }));
+  // Fällige Läuse-Checks: wer Läuse hatte, darf auch nach dem Wiederherstellen erst nach dem Check kommen
+  const ids = new Set(profile.map((p) => p.id));
+  const checks = laeuseCheck.filter((id) => ids.has(id));
+  if (checks.length) daten.laeuseCheck = checks;
   if (tage) daten.tage = tage.map((t) => ({ ...t }));
   return daten;
 }
@@ -89,7 +93,8 @@ export function pruefeImport(daten) {
       const id = typeof t?.id === "string" ? t.id.trim().toLowerCase() : "";
       if (id && id.length <= 64 && ids.has(t.profilId)) tags.set(id, { id, profilId: t.profilId });
     }
-    return { ok: true, profile, tage, tags: [...tags.values()] };
+    const laeuseCheck = Array.isArray(daten.laeuseCheck) ? [...new Set(daten.laeuseCheck.filter((id) => ids.has(id)))] : [];
+    return { ok: true, profile, tage, tags: [...tags.values()], laeuseCheck };
   } catch (err) {
     return { ok: false, fehler: err.message };
   }
