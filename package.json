@@ -1,6 +1,6 @@
 {
   "name": "schafland-kita",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Schafland Kita – Spiel-Terminal für den Kuscheltier-Kindergarten",
   "type": "module",

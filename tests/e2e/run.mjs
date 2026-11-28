@@ -546,7 +546,7 @@ try {
   // Eine Laus, die gerade obenauf liegt (nicht unter einer anderen) und ganz im Bild ist
   // rand: Mindestabstand zu den Rändern [links, oben, rechts, unten]; wartet, bis eine passende Laus da ist
   const freieLaus = async (rand = [5, 5, 5, 5]) => {
-    for (let versuch = 0; versuch < 50; versuch++) {
+    for (let versuch = 0; versuch < 150; versuch++) { // bis 15 s: auf kleinen Bildschirmen dauert es, bis eine Laus frei liegt
       const laus = await page.evaluate(([l0, o0, r0, u0]) => {
         for (const [i, l] of [...document.querySelectorAll('[data-test="laeuse"] .krabbler')].entries()) {
           const r = l.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
@@ -557,7 +557,7 @@ try {
       if (laus) return laus;
       await page.waitForTimeout(100);
     }
-    throw new Error("keine freie Laus gefunden");
+    throw new Error(`keine freie Laus gefunden (Abstand ${rand.join("/")})`);
   };
   const lausMitte = (i) => page.locator('[data-test="laeuse"] .krabbler').nth(i).evaluate((l) => {
     const r = l.getBoundingClientRect();
@@ -628,10 +628,16 @@ try {
   check("Läuse: kein „Wieder gesund“", await dlg.getByRole("button", { name: "Wieder gesund" }).count() === 0);
   await dlg.getByRole("button", { name: "Keine Läuse mehr?" }).click();
   const keineLaeuse = dlg.getByRole("button", { name: "Ja, keine Läuse mehr" });
-  check("Läuse-Check: ohne Haken gesperrt", await keineLaeuse.isDisabled());
-  await dlg.getByRole("button", { name: /gewaschen/ }).click();
-  check("Läuse-Check: ein Haken reicht nicht", await keineLaeuse.isDisabled());
-  await dlg.getByRole("button", { name: /Ausgekämmt/ }).click();
+  check("Läuse-Check: ohne Haken gesperrt", (await keineLaeuse.getAttribute("aria-disabled")) === "true");
+  await keineLaeuse.click({ force: true }); // Playwright klickt aria-disabled nur erzwungen; ein Kind kann tippen
+  check("Zu früh angetippt: Hinweis statt nichts", await sichtbar(dlg.locator('[data-test="check-fehlt"]')) && await dlg.locator('[data-test="laeuse-frei"]').count() === 0);
+  // Doppeltipp auf einen Punkt: Der Haken bleibt (vorher war er danach wieder weg)
+  await dlg.getByRole("button", { name: /gewaschen/ }).dblclick();
+  check("Doppeltipp auf einen Punkt lässt den Haken stehen", (await dlg.getByRole("button", { name: /gewaschen/ }).getAttribute("aria-pressed")) === "true");
+  await keineLaeuse.click({ force: true });
+  check("Läuse-Check: ein Haken reicht nicht", await dlg.locator('[data-test="laeuse-frei"]').count() === 0 && (await keineLaeuse.getAttribute("aria-disabled")) === "true");
+  await dlg.getByRole("button", { name: /Ausgekämmt/ }).dblclick();
+  check("Mit beiden Haken ist „Ja“ frei und der Hinweis weg", (await keineLaeuse.getAttribute("aria-disabled")) === "false" && await dlg.locator('[data-test="check-fehlt"]').count() === 0);
   await shot("23-laeuse-check");
   await keineLaeuse.click();
   check("Läuse-Check bestanden: jetzt anmelden", await sichtbar(dlg.locator('[data-test="laeuse-frei"]')) && await sichtbar(dlg.getByRole("button", { name: "Anmelden" })));

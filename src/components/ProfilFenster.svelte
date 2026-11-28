@@ -102,11 +102,22 @@
   function zumCheck() {
     pop();
     haken = [false, false];
+    fehltNoch = false;
     schritt = "check";
   }
+  // Ein Tipp hakt nur ab: Ein Doppeltipp soll den Haken nicht gleich wieder wegnehmen.
+  // Wer sich vertan hat, geht über „Doch noch Läuse“ zurück.
+  let fehltNoch = $state(false); // „Ja“ zu früh angetippt: fehlende Punkte zeigen
   function hakenTipp(i) {
+    if (haken[i]) return;
     pop();
-    haken[i] = !haken[i];
+    haken[i] = true;
+    if (haken[0] && haken[1]) fehltNoch = false;
+  }
+  function jaTipp() {
+    if (haken[0] && haken[1]) return checkBestanden();
+    schade();
+    fehltNoch = true;
   }
   const checkBestanden = einmal(async () => {
     await kita.laeuseFrei(id);
@@ -201,16 +212,20 @@
         {:else if schritt === "check" && (st === "laeuse" || (st === "offen" && check))}
           <h3><span class="emoji">🔍</span> Hat {p.name} wirklich keine Läuse mehr?</h3>
           <div class="pruef">
-            <button class:an={haken[0]} aria-pressed={haken[0]} onclick={() => hakenTipp(0)}>
+            <button class:an={haken[0]} class:fehlt={fehltNoch && !haken[0]} aria-pressed={haken[0]} onclick={() => hakenTipp(0)}>
               <span class="emoji">🧴</span><span>Haare mit Läusemittel gewaschen<small>Behandlung nach Packungsbeilage</small></span><span class="haken">✓</span>
             </button>
-            <button class:an={haken[1]} aria-pressed={haken[1]} onclick={() => hakenTipp(1)}>
+            <button class:an={haken[1]} class:fehlt={fehltNoch && !haken[1]} aria-pressed={haken[1]} onclick={() => hakenTipp(1)}>
               <span class="emoji">🔍</span><span>Ausgekämmt und nachgeschaut<small>Mit dem Läusekamm – nichts gefunden</small></span><span class="haken">✓</span>
             </button>
           </div>
-          <p class="tipp ok"><span class="emoji">🧑‍🏫</span> Das bestätigt ein Erwachsener.</p>
+          {#if fehltNoch}
+            <p class="tipp laus" role="status" data-test="check-fehlt"><span class="emoji">☝️</span> Bitte erst beide Punkte abhaken.</p>
+          {:else}
+            <p class="tipp ok"><span class="emoji">🧑‍🏫</span> Das bestätigt ein Erwachsener.</p>
+          {/if}
           <div class="knoepfe">
-            <button class="big-btn haupt" disabled={!haken[0] || !haken[1]} onclick={checkBestanden}><span class="emoji">✅</span> Ja, keine Läuse mehr</button>
+            <button class="big-btn haupt" class:gesperrt={!haken[0] || !haken[1]} aria-disabled={!haken[0] || !haken[1]} onclick={jaTipp}><span class="emoji">✅</span> Ja, keine Läuse mehr</button>
             <button class="big-btn light" onclick={dochLaeuse}>Doch noch Läuse</button>
           </div>
         {:else if st === "offen" || st === "da"}
@@ -336,6 +351,9 @@
   .pruef small { display: block; font-family: var(--f-body); font-weight: 600; font-size: 0.95rem; color: var(--ink-soft); }
   .pruef .haken { margin-left: auto; flex: none; width: 2.4rem; height: 2.4rem; border-radius: 50%; border: 3px solid var(--wool-line); display: grid; place-items: center; font-size: 1.4rem; color: transparent; }
   .pruef .an { border-color: var(--grass); box-shadow: 0 0.25rem 0 var(--grass-dark); background: var(--ok-bg); }
+  .pruef .fehlt { border-color: var(--laus); box-shadow: 0 0.25rem 0 var(--laus-dark); animation: wackeln 0.4s ease-in-out 2; }
+  @keyframes wackeln { 25% { transform: translateX(-0.3rem); } 75% { transform: translateX(0.3rem); } }
+  .big-btn.gesperrt { opacity: 0.45; }
   .pruef .an .haken { background: var(--grass); border-color: var(--grass-dark); color: #fff; }
 
   @media (max-width: 760px) {
