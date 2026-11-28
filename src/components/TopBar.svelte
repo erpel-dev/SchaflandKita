@@ -6,11 +6,18 @@
   import { wochentag } from "../lib/zeit.js";
   import { aktionById } from "../lib/aktionen.js";
   import { pop } from "../lib/sounds.js";
+  import { tick } from "svelte";
   import AktionWahl from "./AktionWahl.svelte";
 
   // Aktion schnell wechseln: ein Tipp auf die Pille öffnet die Auswahl
   let aktion = $derived(aktionById(settings.value.aktion));
   let wahlOffen = $state(false);
+  let aktionKnopf;
+  /** Auswahl schließen und den Fokus an die Pille zurückgeben (Tastaturbedienung) */
+  function wahlZu() {
+    wahlOffen = false;
+    tick().then(() => aktionKnopf?.focus({ preventScroll: true }));
+  }
 
   let { ansicht, onBuero, onAnsicht } = $props();
 
@@ -53,7 +60,7 @@
 
   <div class="spacer"></div>
 
-  <button class="pille" aria-label={aktion ? `Aktion: ${aktion.name}, wechseln` : "Aktion wählen"} data-test="aktion-pille" onclick={() => { pop(); wahlOffen = true; }}>
+  <button class="pille" bind:this={aktionKnopf} aria-label={aktion ? `Aktion: ${aktion.name}, wechseln` : "Aktion wählen"} data-test="aktion-pille" onclick={() => { pop(); wahlOffen = true; }}>
     <span class="emoji">{aktion?.emoji ?? "🎉"}</span> <span class="txt">{aktion?.name ?? "Aktion"}</span>
   </button>
   <div class="uhr" aria-label="Uhrzeit"><span class="tag">{wochentag(kita.datum)}</span> <span class="zeit">{kita.uhrzeit}</span></div>
@@ -70,7 +77,7 @@
     <button class="pille" aria-label="Übersicht" onclick={() => onAnsicht("uebersicht")}><span class="emoji">📋</span> <span class="txt">Übersicht</span></button>
   {/if}
 </header>
-{#if wahlOffen}<AktionWahl onClose={() => (wahlOffen = false)} />{/if}
+{#if wahlOffen}<AktionWahl onClose={wahlZu} />{/if}
 
 <style>
   header {
@@ -115,5 +122,11 @@
   @media (max-width: 480px) {
     b { font-size: 1.15rem; }
     .pille .txt { display: none; }
+  }
+  /* Sehr schmal (z. B. 320 px): engere Abstände, damit alle Knöpfe samt Zähler ins Bild passen */
+  @media (max-width: 400px) {
+    header { gap: 0.35rem; padding: 0 0.5rem; }
+    .brand { gap: 0.35rem; }
+    .pille { padding: 0 0.5rem; }
   }
 </style>
