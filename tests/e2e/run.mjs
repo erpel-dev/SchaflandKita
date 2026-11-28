@@ -159,9 +159,11 @@ try {
   // ---------- Abholen im Fenster, zurücknehmen ----------
   await kachel("Erpelküken").click();
   await eq("Fenster zeigt, wer abgeholt hat", async () => (await dlg.locator('[data-test="gegangen"]').textContent()).replace(/\s+/g, " ").trim(), "gegangen um 13:10 Uhr mit 👩 Mama");
-  await dlg.getByRole("button", { name: "Wieder da" }).click();
+  // Doppeltipp: beide Klicks kommen an, bevor die Datenbank antwortet
+  await dlg.getByRole("button", { name: "Wieder da" }).evaluate((knopf) => { knopf.click(); knopf.click(); });
   await dlg.waitFor({ state: "hidden" });
   check("Wieder da schließt das Fenster", (await namen("da")).includes("Erpelküken"));
+  check("Doppeltipp auf Wieder da meldet keinen Konflikt", !((await page.getByRole("status").allTextContents()).join(" ").includes("geändert")));
   await kachel("Erpelküken").click();
   check("Danach zeigt die Kachel den Abholen-Knopf", await sichtbar(abholknopf));
   check("… und die überschrittene Zeit", await sichtbar(dlg.locator(".spaet")));

@@ -34,11 +34,19 @@
       default: return kita.brauchtLaeuseCheck(p.id) ? "noch nicht da · Läuse-Check fehlt" : "noch nicht da";
     }
   }
+  // Doppeltipp auf „Abholen“: der zweite Tipp zählt nicht, solange der erste noch läuft
+  const laufend = new Set();
   async function abholen(id) {
     // Erst fragen, wer abholt (im Fenster des Tiers), sonst gleich auschecken
     if (settings.value.abholerFragen && settings.value.abholer.length) return onAbholen(id);
-    if (await kita.abholen(id)) tschuess();
-    else onKonflikt();
+    if (laufend.has(id)) return;
+    laufend.add(id);
+    try {
+      if (await kita.abholen(id)) tschuess();
+      else onKonflikt();
+    } finally {
+      laufend.delete(id);
+    }
   }
 
   // Tagebuch: alle Tiere, die heute da sind oder waren
