@@ -43,7 +43,7 @@ Im Büro unter Einstellungen → Aktion lässt sich ein besonderer Tag einschalt
 | Sommerfest | sonniger Himmel mit Wimpelkette, Sonnenbrille und Partyhut |
 | Kürbisfest | Herbsthimmel mit fallenden Blättern, Kürbis-Orange, Kürbishut |
 | Weihnachtsmarkt | Winterabend mit Lichterkette und Schnee, Weihnachtsrot, Weihnachtsmütze |
-| Läusealarm | Minz-Himmel mit Seifenblasen, sechs krabbelnde Läuse (fangen keine Tipps ab), Duschhaube, dazu „Hat Läuse“ im Fenster |
+| Läusealarm | Minz-Himmel mit Seifenblasen, sechs krabbelnde Läuse; angetippt flitzen sie schnell weg (der Tipp öffnet dann nichts darunter), Duschhaube, dazu „Hat Läuse“ im Fenster |
 
 Die Farbe für „da“ bleibt in jeder Aktion grün, damit sie nicht mit „krank“ verwechselt wird. „Läuse“ ist immer lila. Wird der Läusealarm ausgeschaltet, bleiben laufende Läuse-Meldungen und fällige Läuse-Checks bestehen.
 

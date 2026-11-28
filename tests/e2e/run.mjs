@@ -458,8 +458,46 @@ try {
   await page.clock.runFor(1500);
   await page.waitForTimeout(300);
   check("Bewegung reduzieren: Läuse sitzen sofort still", (await lagen()) === ruhig);
+  // Eine Laus, die gerade obenauf liegt (nicht unter einer anderen) und ganz im Bild ist
+  const freieLaus = () => page.evaluate(() => {
+    for (const [i, l] of [...document.querySelectorAll('[data-test="laeuse"] .krabbler')].entries()) {
+      const r = l.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      if (x > 5 && y > 5 && x < innerWidth - 5 && y < innerHeight - 5 && document.elementFromPoint(x, y)?.closest(".krabbler") === l) return { i, x, y };
+    }
+    return null;
+  });
+  const lausMitte = (i) => page.locator('[data-test="laeuse"] .krabbler').nth(i).evaluate((l) => {
+    const r = l.getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2];
+  });
+  {
+    const laus = await freieLaus();
+    await page.mouse.click(laus.x, laus.y);
+    // Der Browser verarbeitet den Klick erst im nächsten Bild: ein wenig warten
+    await eq("Bewegung reduzieren: angetippte Laus springt woanders hin", async () => {
+      const [x1, y1] = await lausMitte(laus.i);
+      return Math.hypot(x1 - laus.x, y1 - laus.y) > 1;
+    }, true);
+    check("… ohne ein Fenster zu öffnen", !(await dlg.isVisible()));
+  }
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await eq("… und krabbeln danach weiter", async () => { await page.clock.runFor(200); return (await lagen()) !== ruhig; }, true);
+  {
+    // Antippen verscheucht eine Laus; die Kachel darunter öffnet sich dabei nicht
+    const laus = await freieLaus();
+    const krabbler = page.locator('[data-test="laeuse"] .krabbler').nth(laus.i);
+    await page.mouse.click(laus.x, laus.y);
+    await eq("Angetippte Laus flitzt schnell ein gutes Stück weg", async () => {
+      await page.clock.runFor(100);
+      const [x, y] = await lausMitte(laus.i);
+      return Math.hypot(x - laus.x, y - laus.y) > 60;
+    }, true);
+    check("Tipp auf eine Laus öffnet kein Fenster", !(await dlg.isVisible()));
+    await eq("… und danach krabbelt sie wieder normal", async () => {
+      await page.clock.runFor(500);
+      return krabbler.evaluate((e) => e.classList.contains("flieht"));
+    }, false);
+  }
   check("Läusealarm: Schafe tragen die Duschhaube", await page.locator('.brand svg path[fill="#8fd6f5"]').count() === 1);
   await kachel("Erpelküken").click(); // klappt nur, wenn die Läuse keine Tipps abfangen
   await dlg.getByRole("button", { name: "Hat Läuse" }).click();
