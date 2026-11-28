@@ -118,7 +118,7 @@
   // ---------- Protokoll ----------
   let pDatum = $state(kita.datum);
   let pZeilen = $state([]);
-  const STATUS_TEXT = { offen: "noch nicht da", da: "da", abgeholt: "abgeholt", krank: "krank", abwesend: "nicht da" };
+  const STATUS_TEXT = { offen: "noch nicht da", da: "da", abgeholt: "abgeholt", krank: "krank", abwesend: "nicht da", laeuse: "Läuse" };
   $effect(() => {
     if (tab !== "protokoll") return;
     const datum = pDatum;

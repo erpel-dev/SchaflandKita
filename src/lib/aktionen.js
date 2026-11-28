@@ -28,6 +28,15 @@ export const aktionen = [
     gruss: "Willkommen auf dem Weihnachtsmarkt!",
     ground: ["🎄", "🎁", "🎄"],
   },
+  {
+    id: "laeusealarm",
+    name: "Läusealarm",
+    emoji: "🔍",
+    beschreibung: "Minz-Himmel mit Seifenblasen, krabbelnde Läuse und Schafe mit Duschhaube. Im Fenster lässt sich „Hat Läuse“ melden; zurück geht es erst nach dem Läuse-Check.",
+    startText: "Heute ist Läusealarm!",
+    gruss: "Achtung, Läusealarm! Alle Köpfe werden kontrolliert.",
+    ground: ["🧴", "🔍", "🧴"],
+  },
 ];
 
 export const aktionById = (id) => aktionen.find((a) => a.id === id) ?? null;

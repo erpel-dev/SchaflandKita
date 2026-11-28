@@ -1,9 +1,10 @@
 <script>
-  // Fenster eines Profils: anmelden mit Abholzeit, abholen, krank oder abwesend melden
+  // Fenster eines Profils: anmelden mit Abholzeit, abholen, krank, abwesend oder mit Läusen melden, Läuse-Check
   import { modal } from "../lib/modal.js";
   import { onMount } from "svelte";
   import Avatar from "./Avatar.svelte";
   import Uhr from "./Uhr.svelte";
+  import Laus from "./Laus.svelte";
   import { kita } from "../lib/kita.svelte.js";
   import { settings } from "../lib/settings.svelte.js";
   import { istZeit, verschieben, datumPlus, datumLang, warteInfo } from "../lib/zeit.js";
@@ -18,6 +19,11 @@
   let e = $derived(kita.eintrag(id));
   let kind = $derived(p?.rolle === "kind");
   let zeiten = $derived(settings.value.zeiten);
+  // Läuse: melden nur am Läusealarm-Tag; der Check gilt immer, bis ein Erwachsener bestätigt
+  let laeuseAktion = $derived(settings.value.aktion === "laeusealarm");
+  let check = $derived(kita.brauchtLaeuseCheck(id));
+  let haken = $state([false, false]);
+  let laeuseFrei = $state(false); // gerade den Check bestanden
 
   function startZeit() {
     const eintrag = kita.eintrag(id);
@@ -29,7 +35,7 @@
   }
   let zeit = $state(startZeit());
   let abholer = $derived(settings.value.abholerFragen ? settings.value.abholer : []);
-  // "haupt" | "krank" | "abwesend" | "wer" (Wer holt ab?)
+  // "haupt" | "krank" | "abwesend" | "laeuse" (Meldungen) | "check" (Läuse-Check) | "wer" (Wer holt ab?)
   function startSchritt() {
     return start === "abholen" && st === "da" && kind && abholer.length ? "wer" : "haupt";
   }
@@ -75,8 +81,33 @@
   async function melden() {
     if (!(await kita.melden(id, schritt, datumPlus(kita.datum, tage)))) return konflikt();
     schade();
-    sag(schritt === "krank" ? `Gute Besserung, ${p.name}!` : `Bis bald, ${p.name}!`);
+    sag(schritt === "krank" ? `Gute Besserung, ${p.name}!` : schritt === "laeuse" ? `Oje, Läuse! Gute Besserung, ${p.name}!` : `Bis bald, ${p.name}!`);
     onClose();
+  }
+  function zumCheck() {
+    pop();
+    haken = [false, false];
+    schritt = "check";
+  }
+  function hakenTipp(i) {
+    pop();
+    haken[i] = !haken[i];
+  }
+  async function checkBestanden() {
+    await kita.laeuseFrei(id);
+    hallo();
+    sag(`Juhu, keine Läuse mehr, ${p.name}!`);
+    laeuseFrei = true;
+    schritt = "haupt";
+    zeit = startZeit();
+  }
+  /** „Doch noch Läuse“: während der Meldung zurück, sonst gleich neu melden. */
+  function dochLaeuse() {
+    if (st === "offen") meldung("laeuse");
+    else {
+      pop();
+      schritt = "haupt";
+    }
   }
   async function zurueck() {
     if (st === "abgeholt") {
@@ -92,8 +123,11 @@
   }
   /** Der Anhänger des Profils wurde noch einmal hingehalten: das Naheliegende tun. */
   export function bestaetigen() {
-    if (schritt === "krank" || schritt === "abwesend") return;
-    if (st === "offen") anmelden();
+    if (schritt !== "haupt" && schritt !== "wer") return;
+    if (st === "offen") {
+      if (check) zumCheck(); // ohne Läuse-Check kein Anmelden, auch nicht per Anhänger
+      else anmelden();
+    }
     else if (st === "da") abholen();
   }
   function meldung(art) {
@@ -102,18 +136,23 @@
     schritt = art;
   }
 
-  const GRUSS = { offen: "Hallo", da: "Schön, dass du da bist", abgeholt: "Tschüss", krank: "Gute Besserung", abwesend: "Bis bald" };
-  const LAGE = { offen: "noch nicht da", da: "im Kindergarten", abgeholt: "schon zu Hause", krank: "krank", abwesend: "nicht da" };
+  const GRUSS = { offen: "Hallo", da: "Schön, dass du da bist", abgeholt: "Tschüss", krank: "Gute Besserung", abwesend: "Bis bald", laeuse: "Gute Besserung" };
+  const LAGE = { offen: "noch nicht da", da: "im Kindergarten", abgeholt: "schon zu Hause", krank: "krank", abwesend: "nicht da", laeuse: "hat Läuse" };
+  const MELDUNG = {
+    krank: { titel: "Wie lange krank?", knopf: "Krank melden", farbe: "rot" },
+    abwesend: { titel: "Wie lange nicht da?", knopf: "Nicht da melden", farbe: "" },
+    laeuse: { titel: "Wie lange Läuse?", knopf: "Läuse melden", farbe: "laus" },
+  };
 </script>
 
 {#if p}
   <dialog class="schleier" aria-label={p.name} use:modal oncancel={(ev) => { ev.preventDefault(); onClose(); }} onclick={(ev) => ev.target === ev.currentTarget && onClose()}>
     <div class="fenster">
       <aside class="wer">
-        <div class="blase">{GRUSS[st]}, {p.name}!</div>
+        <div class="blase">{laeuseFrei && st === "offen" ? "Juhu" : GRUSS[st]}, {p.name}!</div>
         <Avatar bild={p.bild} farbe={p.farbe} size="9rem" />
         <b class="name">{p.name}</b>
-        <span class="lage">{LAGE[st]}{#if e?.meldungBis && e.meldungBis > kita.datum}&nbsp;bis {datumLang(e.meldungBis)}{/if}</span>
+        <span class="lage">{st === "offen" && check ? "hatte Läuse" : LAGE[st]}{#if e?.meldungBis && e.meldungBis > kita.datum}&nbsp;bis {datumLang(e.meldungBis)}{/if}</span>
         <button class="big-btn light zu" onclick={onClose}><span class="emoji">↩️</span> Zurück</button>
       </aside>
 
@@ -132,22 +171,39 @@
             <button class="big-btn light" onclick={() => abholen()}>Ohne Angabe</button>
             <button class="big-btn light" onclick={() => (schritt = "haupt")}>Doch nicht</button>
           </div>
-        {:else if (schritt === "krank" || schritt === "abwesend") && st === "offen"}
-          <h3><span class="emoji">{schritt === "krank" ? "🤒" : "🏖️"}</span> {schritt === "krank" ? "Wie lange krank?" : "Wie lange nicht da?"}</h3>
+        {:else if MELDUNG[schritt] && st === "offen"}
+          <h3>{#if schritt === "laeuse"}<Laus size="2.2rem" />{:else}<span class="emoji">{schritt === "krank" ? "🤒" : "🏖️"}</span>{/if} {MELDUNG[schritt].titel}</h3>
           <div class="fein gross">
             <button class="rund" aria-label="Einen Tag kürzer" disabled={tage === 0} onclick={() => { tage -= 1; pop(); }}>−</button>
             <b data-test="bis">{tage === 0 ? "nur heute" : `bis ${datumLang(datumPlus(kita.datum, tage))}`}</b>
             <button class="rund" aria-label="Einen Tag länger" disabled={tage >= 14} onclick={() => { tage += 1; pop(); }}>+</button>
           </div>
+          {#if schritt === "laeuse"}<p class="tipp laus"><span class="emoji">🔍</span> Beim Wiederkommen wird zuerst nachgeschaut, ob die Läuse weg sind.</p>{/if}
           <div class="knoepfe">
-            <button class="big-btn {schritt === 'krank' ? 'rot' : ''} haupt" onclick={melden}>{schritt === "krank" ? "Krank melden" : "Nicht da melden"}</button>
+            <button class="big-btn {MELDUNG[schritt].farbe} haupt" onclick={melden}>{MELDUNG[schritt].knopf}</button>
             <button class="big-btn light" onclick={() => (schritt = "haupt")}>Doch nicht</button>
+          </div>
+        {:else if schritt === "check" && (st === "laeuse" || (st === "offen" && check))}
+          <h3><span class="emoji">🔍</span> Hat {p.name} wirklich keine Läuse mehr?</h3>
+          <div class="pruef">
+            <button class:an={haken[0]} aria-pressed={haken[0]} onclick={() => hakenTipp(0)}>
+              <span class="emoji">🧴</span><span>Haare mit Läusemittel gewaschen<small>Behandlung nach Packungsbeilage</small></span><span class="haken">✓</span>
+            </button>
+            <button class:an={haken[1]} aria-pressed={haken[1]} onclick={() => hakenTipp(1)}>
+              <span class="emoji">🔍</span><span>Ausgekämmt und nachgeschaut<small>Mit dem Läusekamm – nichts gefunden</small></span><span class="haken">✓</span>
+            </button>
+          </div>
+          <p class="tipp ok"><span class="emoji">🧑‍🏫</span> Das bestätigt ein Erwachsener.</p>
+          <div class="knoepfe">
+            <button class="big-btn haupt" disabled={!haken[0] || !haken[1]} onclick={checkBestanden}><span class="emoji">✅</span> Ja, keine Läuse mehr</button>
+            <button class="big-btn light" onclick={dochLaeuse}>Doch noch Läuse</button>
           </div>
         {:else if st === "offen" || st === "da"}
           {#if st === "da"}
             {#if spaet?.ueberfaellig}<p class="spaet"><span class="emoji">⏰</span> {kind ? "wartet" : "überfällig"} seit {spaet.text.replace("wartet seit ", "")}</p>{/if}
             <h3>{kind ? "Abholzeit ändern" : "Dienstende ändern"}</h3>
           {:else}
+            {#if laeuseFrei}<p class="tipp ok" data-test="laeuse-frei"><span class="emoji">🎉</span> Läuse-Check geschafft! Jetzt anmelden.</p>{/if}
             <h3>{kind ? "Wann wirst du abgeholt?" : "Bis wann arbeitest du heute?"}</h3>
           {/if}
           <div class="zeiten">
@@ -165,11 +221,17 @@
             <b data-test="zeit">{zeit} Uhr</b>
             <button class="rund" aria-label="Später" onclick={() => waehle(verschieben(zeit, settings.value.schritt))}>+</button>
           </div>
-          {#if perTag}<p class="tagtipp" data-test="tagtipp"><span class="emoji">🏷️</span> Anhänger noch einmal hinhalten: {st === "offen" ? "anmelden" : kind ? "abholen" : "Feierabend"}</p>{/if}
+          {#if perTag}<p class="tagtipp" data-test="tagtipp"><span class="emoji">🏷️</span> Anhänger noch einmal hinhalten: {st === "offen" ? (check ? "Läuse-Check" : "anmelden") : kind ? "abholen" : "Feierabend"}</p>{/if}
+          {#if st === "offen" && check}<p class="tipp laus" data-test="laeuse-hinweis"><Laus size="1.5rem" /> {p.name} hatte Läuse. Vor dem Anmelden bitte nachschauen.</p>{/if}
           <div class="knoepfe">
             {#if st === "offen"}
-              <button class="big-btn haupt" onclick={anmelden}><span class="emoji">✅</span> Anmelden</button>
+              {#if check}
+                <button class="big-btn haupt" onclick={zumCheck}><span class="emoji">🔍</span> Läuse-Check</button>
+              {:else}
+                <button class="big-btn haupt" onclick={anmelden}><span class="emoji">✅</span> Anmelden</button>
+              {/if}
               <button class="big-btn rot" onclick={() => meldung("krank")}><span class="emoji">🤒</span> Krank</button>
+              {#if laeuseAktion}<button class="big-btn laus" onclick={() => meldung("laeuse")}><Laus size="1.7rem" /> Hat Läuse</button>{/if}
               <button class="big-btn light" onclick={() => meldung("abwesend")}><span class="emoji">🏖️</span> Nicht da</button>
             {:else}
               <button class="big-btn abholen" onclick={abholenTipp}><span class="emoji">👋</span> {kind ? "Abholen" : "Feierabend"}</button>
@@ -177,15 +239,24 @@
             {/if}
           </div>
         {:else}
-          <div class="gross-bild emoji">{st === "krank" ? "🤒" : st === "abwesend" ? "🏖️" : "🏠"}</div>
+          {#if st === "laeuse"}
+            <div class="gross-bild"><Laus size="8rem" /></div>
+            <p class="hinweis">{p.name} hat Läuse. Erst wenn sie weg sind, darf {p.name} wieder spielen kommen.</p>
+          {:else}
+            <div class="gross-bild emoji">{st === "krank" ? "🤒" : st === "abwesend" ? "🏖️" : "🏠"}</div>
+          {/if}
           {#if st === "abgeholt"}
             <p class="hinweis" data-test="gegangen">{e.nichtAbgeholt ? "nicht abgeholt" : `gegangen um ${e.gegangenUm} Uhr`}{#if e.abgeholtVon}&nbsp;mit <span class="emoji">{e.abgeholtVonBild}</span> {e.abgeholtVon}{/if}</p>
             {#if bericht.length}<div class="bericht">{#each bericht as b (b.text)}<span><span class="emoji">{b.bild}</span> {b.text}</span>{/each}</div>{/if}
           {/if}
           <div class="knoepfe">
-            <button class="big-btn haupt" onclick={zurueck}>
-              {st === "krank" ? "Wieder gesund" : st === "abwesend" ? "Doch da" : "Wieder da"}
-            </button>
+            {#if st === "laeuse"}
+              <button class="big-btn haupt" onclick={zumCheck}><span class="emoji">🔍</span> Keine Läuse mehr?</button>
+            {:else}
+              <button class="big-btn haupt" onclick={zurueck}>
+                {st === "krank" ? "Wieder gesund" : st === "abwesend" ? "Doch da" : "Wieder da"}
+              </button>
+            {/if}
           </div>
         {/if}
       </div>
@@ -239,6 +310,18 @@
   .wer-knopf b { font-family: var(--f-display); font-weight: 800; font-size: 1.15rem; line-height: 1.1; text-align: center; }
   .gross-bild { font-size: 7rem; text-align: center; padding: 1rem 0 0; }
   .hinweis { text-align: center; margin: 0; color: var(--ink-soft); font-size: 1.2rem; }
+  .knoepfe .haupt { white-space: nowrap; }
+  .tipp { margin: 0; text-align: center; font-weight: 800; border-radius: 0.9rem; padding: 0.5rem 0.9rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+  .tipp.laus { color: var(--laus-dark); background: var(--laus-bg); border: 2px solid #ddd0f2; }
+  .tipp.ok { color: var(--grass-dark); background: var(--ok-bg); }
+  .pruef { display: grid; gap: 0.7rem; }
+  .pruef button { display: flex; align-items: center; gap: 0.9rem; padding: 0.8rem 1rem; border-radius: 1.1rem; background: #fff; border: 3px solid var(--wool-line); box-shadow: 0 0.25rem 0 var(--wool-line); text-align: left; font-family: var(--f-display); font-weight: 800; font-size: 1.35rem; }
+  .pruef button:active { transform: translateY(0.15rem); }
+  .pruef .emoji { font-size: 2.4rem; }
+  .pruef small { display: block; font-family: var(--f-body); font-weight: 600; font-size: 0.95rem; color: var(--ink-soft); }
+  .pruef .haken { margin-left: auto; flex: none; width: 2.4rem; height: 2.4rem; border-radius: 50%; border: 3px solid var(--wool-line); display: grid; place-items: center; font-size: 1.4rem; color: transparent; }
+  .pruef .an { border-color: var(--grass); box-shadow: 0 0.25rem 0 var(--grass-dark); background: var(--ok-bg); }
+  .pruef .an .haken { background: var(--grass); border-color: var(--grass-dark); color: #fff; }
 
   @media (max-width: 760px) {
     .fenster { grid-template-columns: 1fr; border-radius: 1.4rem; }

@@ -53,5 +53,15 @@
       <rect x="15.5" y="31" width="30" height="7" rx="3.5" fill="#fffdf7" stroke="#e6e0d0" stroke-width="0.8" />
       <circle cx="51" cy="25" r="4.6" fill="#fffdf7" stroke="#e6e0d0" stroke-width="0.8" />
     </g>
+  {:else if kostuem === "laeusealarm"}
+    <!-- Duschhaube mit Rüschen, daneben zwei Seifenblasen -->
+    <g transform="rotate(-10 31 36)">
+      <path d="M15 35C15 20 24 14 31 14s16 6 16 21z" fill="#8fd6f5" stroke="#5bb7e0" stroke-width="1.2" />
+      <g fill="#c8ecfb"><circle cx="24" cy="24" r="2" /><circle cx="33" cy="20" r="1.6" /><circle cx="39" cy="27" r="2" /><circle cx="29" cy="29" r="1.4" /></g>
+      <g fill="#fff" stroke="#8fd6f5" stroke-width="1">
+        {#each [15, 19.5, 24, 28.5, 33, 37.5, 42, 46.5] as x (x)}<circle cx={x} cy="35.5" r="2.6" />{/each}
+      </g>
+    </g>
+    <g fill="none" stroke="#7cc8ee" stroke-width="1"><circle cx="50" cy="14" r="3.5" /><circle cx="56" cy="7" r="2.2" /></g>
   {/if}
 </svg>

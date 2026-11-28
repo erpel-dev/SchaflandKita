@@ -30,7 +30,8 @@
       case "abgeholt": return e.nichtAbgeholt ? "nicht abgeholt" : `gegangen ${e.gegangenUm}${e.abgeholtVon ? ` mit ${e.abgeholtVon}` : ""}`;
       case "krank": return `krank${bis}`;
       case "abwesend": return `nicht da${bis}`;
-      default: return "noch nicht da";
+      case "laeuse": return `Läuse${bis}`;
+      default: return kita.brauchtLaeuseCheck(p.id) ? "noch nicht da · Läuse-Check fehlt" : "noch nicht da";
     }
   }
   async function abholen(id) {
@@ -52,7 +53,7 @@
   <div class="zaehler">
     <span class="chip gut" data-test="z-tiere"><b>{zahl(kinder, "da")}</b> {zahl(kinder, "da") === 1 ? "Tier" : "Tiere"} da</span>
     <span class="chip gut" data-test="z-erzieher"><b>{zahl(erzieher, "da")}</b> Erzieher da</span>
-    <span class="chip" data-test="z-fehlen"><b>{zahl(kita.profile, "krank")}</b> krank, <b>{zahl(kita.profile, "abwesend")}</b> nicht da</span>
+    <span class="chip" data-test="z-fehlen"><b>{zahl(kita.profile, "krank")}</b> krank, <b>{zahl(kita.profile, "abwesend")}</b> nicht da{#if zahl(kita.profile, "laeuse")}, <b>{zahl(kita.profile, "laeuse")}</b> Läuse{/if}</span>
     <span class="chip" data-test="z-offen"><b>{zahl(kinder, "offen")}</b> noch nicht da</span>
   </div>
 
@@ -134,6 +135,7 @@
   .zeile small { margin-left: auto; color: var(--ink-soft); font-size: 1rem; text-align: right; }
   .zeile.da { background: var(--da-bg); border-color: var(--da); }
   .zeile.krank { background: #fdf0f2; border-color: var(--nose); }
+  .zeile.laeuse { background: var(--laus-bg); border-color: var(--laus); }
   .zeile.abwesend, .zeile.abgeholt { background: var(--wool-2); }
   .abhol .zeit { font-family: var(--f-display); font-weight: 800; font-size: 1.7rem; min-width: 4.6rem; font-variant-numeric: tabular-nums; }
   .abhol .wer { flex: 1; display: flex; align-items: center; gap: 0.7rem; text-align: left; min-width: 0; }

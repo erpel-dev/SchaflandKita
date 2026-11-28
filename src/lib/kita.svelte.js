@@ -1,4 +1,4 @@
-// Der Zustand der Kita: alle Profile und wer heute da, abgeholt, krank oder abwesend ist.
+// Der Zustand der Kita: alle Profile und wer heute da, abgeholt, krank, abwesend oder mit Läusen zu Hause ist.
 import { liveQuery } from "dexie";
 import { db, kvGet, kvSet } from "./db.js";
 import { datumStr, zeitStr, tageVonBis } from "./zeit.js";
@@ -8,6 +8,8 @@ import { tagId } from "./nfc.svelte.js";
 import { ESSEN, SCHLAF, abholerSauber } from "./tagebuch.js";
 import { BEISPIELE } from "./beispiele.js";
 
+const MELDUNGEN = ["krank", "abwesend", "laeuse"];
+
 class Kita {
   profile = $state([]);
   /** Einträge von heute: profilId → { status, gekommenUm, abholzeit, gegangenUm, meldungBis } */
@@ -16,6 +18,8 @@ class Kita {
   tags = $state([]);
   /** Pinnwand, neueste zuerst */
   nachrichten = $state([]);
+  /** Wer Läuse hatte, muss vor dem nächsten Anmelden den Läuse-Check bestehen: ids der Profile */
+  laeuseCheck = $state([]);
   /** Bis hierhin wurde die Pinnwand schon angesehen (für den Zähler neuer Nachrichten) */
   gesehenBis = $state("");
   ungelesen = $derived(this.nachrichten.filter((n) => n.erstelltAm > this.gesehenBis).length);
@@ -37,6 +41,8 @@ class Kita {
     this.nachrichten = (await db.nachrichten.toArray()).sort((a, b) => b.erstelltAm.localeCompare(a.erstelltAm));
     this.gesehenBis = await kvGet("pinnwandGesehen", "");
     this.tags = await db.tags.toArray();
+    const ids = new Set(liste.map((p) => p.id));
+    this.laeuseCheck = (await kvGet("laeuseCheck", [])).filter((id) => ids.has(id));
     await this.#tagLaden();
   }
 
@@ -103,8 +109,9 @@ class Kita {
     return !!eintrag;
   }
 
-  /** Bringen: anmelden mit Abholzeit (bei Erziehern: Dienstende). */
-  anmelden(id, abholzeit) {
+  /** Bringen: anmelden mit Abholzeit (bei Erziehern: Dienstende). Nach Läusen erst nach dem Läuse-Check. */
+  async anmelden(id, abholzeit) {
+    if (this.brauchtLaeuseCheck(id)) return false;
     return this.#setze(id, ["offen"], { status: "da", gekommenUm: this.uhrzeit, abholzeit, gegangenUm: null, meldungBis: null });
   }
   zeitAendern(id, abholzeit) {
@@ -135,9 +142,9 @@ class Kita {
     return this.#setze(id, ["abgeholt"], { status: "da", gegangenUm: null, abgeholtVon: null, abgeholtVonBild: null, nichtAbgeholt: false });
   }
 
-  /** Krank oder abwesend melden, heute oder bis einschließlich "bis". */
+  /** Krank, abwesend oder mit Läusen melden, heute oder bis einschließlich "bis". */
   async melden(id, status, bis = this.datum) {
-    if (status !== "krank" && status !== "abwesend") throw new Error("unbekannte Meldung");
+    if (!MELDUNGEN.includes(status)) throw new Error("unbekannte Meldung");
     const heute = this.datum;
     const tage = tageVonBis(heute, bis < heute ? heute : bis);
     const letzter = tage.at(-1);
@@ -150,7 +157,35 @@ class Kita {
       return true;
     });
     if (gespeichert && this.datum === heute) this.heute = { ...this.heute, [id]: eintraege[0] };
+    if (gespeichert && status === "laeuse") await this.#laeuseCheckSetzen(id, true);
     return gespeichert;
+  }
+
+  // ---------- Läuse ----------
+
+  brauchtLaeuseCheck(id) {
+    return this.laeuseCheck.includes(id);
+  }
+  async #laeuseCheckSetzen(id, offen) {
+    const ohne = this.laeuseCheck.filter((x) => x !== id);
+    this.laeuseCheck = offen ? [...ohne, id] : ohne;
+    await kvSet("laeuseCheck", $state.snapshot(this.laeuseCheck));
+  }
+  /** Läuse-Check bestanden: die Markierung fällt weg, eine laufende Läuse-Meldung endet ab heute. */
+  async laeuseFrei(id) {
+    const datum = this.datum;
+    const beendet = await db.transaction("rw", db.tage, async () => {
+      const alt = await db.tage.get([id, datum]);
+      if (alt?.status !== "laeuse") return false;
+      await db.tage.where("profilId").equals(id).and((e) => e.datum >= datum && e.status === "laeuse").delete();
+      return true;
+    });
+    await this.#laeuseCheckSetzen(id, false);
+    if (beendet && this.datum === datum) {
+      const { [id]: _, ...rest } = this.heute;
+      this.heute = rest;
+    }
+    return true;
   }
 
   /** Meldung oder Anmeldung zurücknehmen: zurück auf „noch nicht da“. Mehrtägige Meldungen enden ganz. */
@@ -160,7 +195,7 @@ class Kita {
     const geloescht = await db.transaction("rw", db.tage, async () => {
       const alt = await db.tage.get([id, datum]);
       if (!alt || alt.status !== erwartet) return false;
-      if (alt.status === "krank" || alt.status === "abwesend") {
+      if (MELDUNGEN.includes(alt.status)) {
         await db.tage.where("profilId").equals(id)
           .and((e) => e.datum >= datum && e.datum <= (alt.meldungBis ?? datum) && e.status === alt.status)
           .delete();
@@ -194,6 +229,7 @@ class Kita {
     });
     this.profile = this.profile.filter((p) => p.id !== id);
     this.tags = this.tags.filter((t) => t.profilId !== id);
+    if (this.brauchtLaeuseCheck(id)) await this.#laeuseCheckSetzen(id, false);
     const { [id]: _, ...rest } = this.heute;
     this.heute = rest;
     this.nachrichten = await db.nachrichten.orderBy("erstelltAm").reverse().toArray();
@@ -291,6 +327,11 @@ class Kita {
     });
     this.profile = sortiereProfile(liste);
     this.tags = await db.tags.toArray();
+    const ids = new Set(liste.map((p) => p.id));
+    if (this.laeuseCheck.some((id) => !ids.has(id))) {
+      this.laeuseCheck = this.laeuseCheck.filter((id) => ids.has(id));
+      await kvSet("laeuseCheck", $state.snapshot(this.laeuseCheck));
+    }
     await this.#tagLaden();
   }
 
