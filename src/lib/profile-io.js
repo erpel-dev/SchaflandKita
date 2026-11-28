@@ -66,9 +66,13 @@ function normalisiereTag(roh, ids) {
 }
 
 /** Inhalt der Export-Datei. tage (das Protokoll) ist optional; tags sind die NFC-Anhänger. */
-export function exportDaten(profile, { tage = null, tags = [], jetzt = new Date() } = {}) {
+export function exportDaten(profile, { tage = null, tags = [], laeuseCheck = [], jetzt = new Date() } = {}) {
   const daten = { format: FORMAT, version: VERSION, exportiertAm: jetzt.toISOString(), profile: profile.map((p) => ({ ...p })) };
   if (tags.length) daten.tags = tags.map((t) => ({ id: t.id, profilId: t.profilId }));
+  // Fällige Läuse-Checks: wer Läuse hatte, darf auch nach dem Wiederherstellen erst nach dem Check kommen
+  const ids = new Set(profile.map((p) => p.id));
+  const checks = laeuseCheck.filter((id) => ids.has(id));
+  if (checks.length) daten.laeuseCheck = checks;
   if (tage) daten.tage = tage.map((t) => ({ ...t }));
   return daten;
 }
@@ -89,7 +93,8 @@ export function pruefeImport(daten) {
       const id = typeof t?.id === "string" ? t.id.trim().toLowerCase() : "";
       if (id && id.length <= 64 && ids.has(t.profilId)) tags.set(id, { id, profilId: t.profilId });
     }
-    return { ok: true, profile, tage, tags: [...tags.values()] };
+    const laeuseCheck = Array.isArray(daten.laeuseCheck) ? [...new Set(daten.laeuseCheck.filter((id) => ids.has(id)))] : [];
+    return { ok: true, profile, tage, tags: [...tags.values()], laeuseCheck };
   } catch (err) {
     return { ok: false, fehler: err.message };
   }

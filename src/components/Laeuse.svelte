@@ -4,7 +4,15 @@
   import Laus from "./Laus.svelte";
 
   const ANZAHL = 6;
-  const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // „Bewegung reduzieren“ auch dann sofort übernehmen, wenn es bei laufendem Läusealarm umgeschaltet wird
+  const bewegung = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+  let still = $state(bewegung?.matches ?? false);
+  $effect(() => {
+    if (!bewegung) return;
+    const wechsel = (ev) => (still = ev.matches);
+    bewegung.addEventListener("change", wechsel);
+    return () => bewegung.removeEventListener("change", wechsel);
+  });
   const laeuse = Array.from({ length: ANZAHL }, () => ({
     groesse: 1.5 + Math.random() * 0.8, // rem
     x: 0, y: 0,
@@ -14,12 +22,17 @@
   }));
   let feld;
   const elemente = [];
+  let verteilt = false;
 
   $effect(() => {
+    const ruhig = still; // bei jedem Wechsel läuft dieser Effekt neu und hält die Schleife an oder startet sie
     const breite = () => feld.clientWidth, hoehe = () => feld.clientHeight;
-    for (const l of laeuse) {
-      l.x = Math.random() * (breite() - 30);
-      l.y = Math.random() * (hoehe() - 30);
+    if (!verteilt) {
+      for (const l of laeuse) {
+        l.x = Math.random() * (breite() - 30);
+        l.y = Math.random() * (hoehe() - 30);
+      }
+      verteilt = true;
     }
     let vorher = 0, nr = 0;
     function schritt(t) {
@@ -41,7 +54,7 @@
         el.style.transform = `translate(${l.x}px, ${l.y}px) rotate(${l.winkel}rad)`;
         el.classList.toggle("steht", l.pause > 0);
       });
-      if (!still) nr = requestAnimationFrame(schritt);
+      if (!ruhig) nr = requestAnimationFrame(schritt);
     }
     schritt(0);
     return () => cancelAnimationFrame(nr);

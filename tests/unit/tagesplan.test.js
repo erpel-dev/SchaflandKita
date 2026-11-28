@@ -46,8 +46,8 @@ test("Sätze zum Vorlesen", () => {
   assert.equal(planSatz(plan, 99, "13:10"), "");
 });
 
-test("Drei Aktionen", () => {
-  assert.deepEqual(aktionen.map((a) => a.name), ["Sommerfest", "Kürbisfest", "Weihnachtsmarkt"]);
+test("Vier Aktionen", () => {
+  assert.deepEqual(aktionen.map((a) => a.name), ["Sommerfest", "Kürbisfest", "Weihnachtsmarkt", "Läusealarm"]);
   for (const a of aktionen) assert.ok(a.id && a.emoji && a.startText && a.gruss && a.ground.length === 3, a.id);
   assert.equal(aktionById("kuerbisfest").name, "Kürbisfest");
   assert.equal(aktionById("gibt-es-nicht"), null);

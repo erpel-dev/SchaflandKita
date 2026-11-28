@@ -88,7 +88,7 @@
   let impFertig = $state("");
 
   async function exportieren() {
-    const daten = exportDaten($state.snapshot(kita.profile), { tage: mitProtokoll ? await kita.alleTage() : null, tags: $state.snapshot(kita.tags) });
+    const daten = exportDaten($state.snapshot(kita.profile), { tage: mitProtokoll ? await kita.alleTage() : null, tags: $state.snapshot(kita.tags), laeuseCheck: $state.snapshot(kita.laeuseCheck) });
     herunterladen(`schafland-kita-profile-${kita.datum}.json`, JSON.stringify(daten, null, 2));
   }
   async function einlesen(ev) {
@@ -110,7 +110,7 @@
   }
   async function uebernehmen() {
     const n = imp.profile.length;
-    await kita.importieren(imp.profile, impModus, imp.tage, imp.tags);
+    await kita.importieren(imp.profile, impModus, imp.tage, imp.tags, imp.laeuseCheck);
     imp = null; form = null;
     impFertig = `${n} ${n === 1 ? "Profil" : "Profile"} übernommen`;
   }

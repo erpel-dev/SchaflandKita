@@ -83,6 +83,44 @@ test("Export und Import kennen den Status Läuse", async () => {
   assert.deepEqual(r.tage.filter((e) => e.status === "laeuse").map((e) => e.datum), ["2026-11-16", "2026-11-17"]);
 });
 
+test("Ein anderer Tab meldet Läuse: Anmelden prüft den gespeicherten Stand", async () => {
+  // Tab B schreibt die Markierung direkt in die Datenbank; dieser Tab weiß noch nichts davon
+  await db.kv.put({ key: "laeuseCheck", value: [S] });
+  assert.equal(kita.brauchtLaeuseCheck(S), false);
+  assert.equal(await kita.anmelden(S, "14:00"), false);
+  assert.equal(kita.status(S), "offen");
+  // Eine weitere Meldung hier überschreibt die Markierung von Tab B nicht
+  await kita.melden("beispiel-erpelkueken", "laeuse");
+  assert.deepEqual((await kvGet("laeuseCheck", [])).sort(), ["beispiel-erpelkueken", S].sort());
+  assert.equal(kita.brauchtLaeuseCheck(S), true);
+});
+
+test("Export und Import in leere Daten: der Check bleibt fällig", async () => {
+  const datei = JSON.parse(JSON.stringify(exportDaten(kita.profile, { laeuseCheck: kita.laeuseCheck })));
+  assert.deepEqual([...datei.laeuseCheck].sort(), ["beispiel-erpelkueken", S].sort());
+  // frisches Gerät: alles leer
+  await Promise.all([db.profile.clear(), db.tage.clear(), db.tags.clear(), db.kv.clear(), db.nachrichten.clear()]);
+  await kita.load(um(24, 7));
+  assert.equal(kita.brauchtLaeuseCheck(S), false);
+  const r = pruefeImport(datei);
+  assert.equal(r.ok, true, r.fehler);
+  await kita.importieren(r.profile, "ersetzen", r.tage, r.tags, r.laeuseCheck);
+  assert.equal(kita.brauchtLaeuseCheck(S), true);
+  assert.equal(await kita.anmelden(S, "14:00"), false);
+  assert.equal(kita.status(S), "offen");
+  await kita.laeuseFrei(S);
+  assert.equal(await kita.anmelden(S, "14:00"), true);
+});
+
+test("Import: fremde ids werden verworfen, Zusammenführen behält bestehende Checks", async () => {
+  const datei = JSON.parse(JSON.stringify(exportDaten(kita.profile)));
+  datei.laeuseCheck = [W, "fremd", 42, S];
+  const r = pruefeImport(datei);
+  assert.deepEqual(r.laeuseCheck, [S]); // Wolli ist gelöscht und steht nicht in der Datei
+  await kita.importieren(r.profile, "zusammenfuehren", [], [], []);
+  assert.deepEqual([...kita.laeuseCheck], ["beispiel-erpelkueken"]);
+});
+
 test("Unbekannte Meldungen werden abgelehnt", async () => {
   await assert.rejects(() => kita.melden(S, "flöhe"), /unbekannte Meldung/);
 });

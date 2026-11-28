@@ -99,6 +99,7 @@
 
   $effect(() => kita.beobachteTag(kita.datum));
   $effect(() => kita.beobachteNachrichten());
+  $effect(() => kita.beobachteLaeuse());
 
   // Uhr: Abholzeiten, Wartezeiten und der Tageswechsel um Mitternacht hängen daran
   $effect(() => {
