@@ -2,7 +2,8 @@
   import Sheep from "./Sheep.svelte";
   import Deko from "./Deko.svelte";
   import { settings } from "../lib/settings.svelte.js";
-  import { aktionById } from "../lib/aktionen.js";
+  import { aktionById, aktionen, KEINE_AKTION } from "../lib/aktionen.js";
+  import { pop } from "../lib/sounds.js";
   let { onOpen } = $props();
   let aktion = $derived(aktionById(settings.value.aktion));
 </script>
@@ -19,6 +20,14 @@
   </div>
   {#if aktion}<p class="aktion"><span class="emoji">{aktion.emoji}</span> {aktion.startText} <span class="emoji">{aktion.emoji}</span></p>{/if}
   <button class="big-btn open" onclick={onOpen}>Kita öffnen</button>
+  <!-- Morgens gleich festlegen, was heute ist -->
+  <div class="heute" role="group" aria-label="Aktion für heute">
+    <span>Heute:</span>
+    {#each [KEINE_AKTION, ...aktionen] as a (a.id ?? "keine")}
+      {@const an = (settings.value.aktion ?? null) === a.id}
+      <button class:an aria-pressed={an} onclick={() => { pop(); settings.set({ aktion: a.id }); }}><span class="emoji">{a.emoji}</span> {a.id ? a.name : "normal"}</button>
+    {/each}
+  </div>
   <div class="grass"></div>
   {#if aktion}
     <div class="ground" aria-hidden="true">
@@ -28,7 +37,10 @@
 </div>
 
 <style>
-  .start { position: fixed; inset: 0; background: linear-gradient(var(--sky), var(--sky-bottom) 75%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; overflow: hidden; }
+  .heute { z-index: 1; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.4rem; max-width: 90vw; font-family: var(--f-display); font-weight: 700; color: var(--sky-ink-soft); }
+  .heute button { background: rgba(255, 255, 255, 0.8); border: 2px solid transparent; border-radius: 99px; padding: 0.3rem 0.8rem; font-family: var(--f-display); font-weight: 700; color: var(--ink); }
+  .heute button.an { border-color: var(--grass); background: #fff; }
+  .start { position: fixed; inset: 0; background: linear-gradient(var(--sky), var(--sky-bottom) 75%); display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 2rem; overflow-x: hidden; overflow-y: auto; padding: 1rem 0; }
   .hero { text-align: center; display: flex; flex-direction: column; align-items: center; }
   .herde { display: flex; align-items: flex-end; }
   h1 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 5.4rem; line-height: 0.9; color: var(--sky-ink); }
@@ -54,6 +66,10 @@
     .ground { font-size: 3rem; bottom: 2rem; }
     .hero :global(.bob) { width: 8rem !important; height: 8rem !important; }
     .hero :global(.spaet) { width: 4.5rem !important; height: 4.5rem !important; }
+  }
+  /* Sehr kurze Displays: Schafe und Untertitel weglassen, damit „Heute:“ erreichbar bleibt (sonst scrollen) */
+  @media (max-height: 340px) {
+    .herde, .hero p { display: none; }
   }
   @media (max-height: 500px) {
     .start { gap: 0.6rem; }

@@ -8,8 +8,9 @@
     rosa: ["#fbd0d8", "#e79aab"],
   };
   import { settings } from "../lib/settings.svelte.js";
-  let { size = "3rem", class: cls = "", wolle = "weiss" } = $props();
-  let kostuem = $derived(settings.value.aktion);
+  // kostuem: fest vorgegebene Aktion (für Vorschaubilder); ohne Angabe gilt die laufende Aktion
+  let { size = "3rem", class: cls = "", wolle = "weiss", kostuem: festesKostuem = undefined } = $props();
+  let kostuem = $derived(festesKostuem === undefined ? settings.value.aktion : festesKostuem);
   let fell = $derived(FELL[wolle] ?? FELL.weiss);
 </script>
 

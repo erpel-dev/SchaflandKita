@@ -1,5 +1,6 @@
 // Aktionen: besondere Tage mit eigenem Aussehen (Farben in app.css, Kostüm in Sheep.svelte,
 // Himmel in Deko.svelte). Neue Aktionen hinten anhängen.
+// vorschau: Farben der Bildkarte in der Aktionsauswahl (Himmel oben, Himmel unten, Wiese)
 export const aktionen = [
   {
     id: "sommerfest",
@@ -9,6 +10,7 @@ export const aktionen = [
     startText: "Heute ist Sommerfest!",
     gruss: "Willkommen zum Sommerfest!",
     ground: ["🎈", "🍦", "🌻"],
+    vorschau: ["#8fd4ff", "#fff2b3", "#7cc24f"],
   },
   {
     id: "kuerbisfest",
@@ -18,6 +20,7 @@ export const aktionen = [
     startText: "Heute ist Kürbisfest!",
     gruss: "Willkommen zum Kürbisfest!",
     ground: ["🎃", "🌽", "🎃"],
+    vorschau: ["#ffd08a", "#ffecc9", "#b98a3c"],
   },
   {
     id: "weihnachtsmarkt",
@@ -27,6 +30,7 @@ export const aktionen = [
     startText: "Heute ist Weihnachtsmarkt!",
     gruss: "Willkommen auf dem Weihnachtsmarkt!",
     ground: ["🎄", "🎁", "🎄"],
+    vorschau: ["#1b2a4e", "#3d5d92", "#f4f8fc"],
   },
   {
     id: "laeusealarm",
@@ -36,7 +40,11 @@ export const aktionen = [
     startText: "Heute ist Läusealarm!",
     gruss: "Achtung, Läusealarm! Alle Köpfe werden kontrolliert.",
     ground: ["🧴", "🔍", "🧴"],
+    vorschau: ["#b9ece2", "#eefbf7", "#6cc4a1"],
   },
 ];
 
 export const aktionById = (id) => aktionen.find((a) => a.id === id) ?? null;
+
+/** „Keine Aktion“ als Karte für die Aktionsauswahl (ganz normaler Tag). */
+export const KEINE_AKTION = { id: null, name: "Keine Aktion", emoji: "🐑", startText: "Ganz normaler Tag", vorschau: ["#cfe8f7", "#eaf6fd", "#6cae4f"] };

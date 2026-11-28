@@ -1,4 +1,4 @@
-import { kvGet, kvSet } from "./db.js";
+import { db, kvGet } from "./db.js";
 import { STANDARD_PLAN } from "./tagesplan.js";
 import { STANDARD_ABHOLER } from "./tagebuch.js";
 
@@ -31,9 +31,15 @@ class Settings {
     this.value = { ...structuredClone(DEFAULTS), ...(await kvGet("settings", {})) };
   }
 
+  /** Nur die geänderten Felder speichern: Sie werden in derselben Transaktion mit dem gespeicherten Stand
+   *  zusammengeführt, damit ein zweiter Tab mit älterem Stand keine anderen Einstellungen zurücksetzt. */
   set(patch) {
     Object.assign(this.value, patch);
-    return kvSet("settings", $state.snapshot(this.value));
+    const neu = $state.snapshot(patch);
+    return db.transaction("rw", db.kv, async () => {
+      const alt = (await db.kv.get("settings"))?.value ?? {};
+      await db.kv.put({ key: "settings", value: { ...alt, ...neu } });
+    });
   }
 }
 
