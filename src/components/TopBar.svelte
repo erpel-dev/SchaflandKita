@@ -4,6 +4,13 @@
   import { settings } from "../lib/settings.svelte.js";
   import { kita } from "../lib/kita.svelte.js";
   import { wochentag } from "../lib/zeit.js";
+  import { aktionById } from "../lib/aktionen.js";
+  import { pop } from "../lib/sounds.js";
+  import AktionWahl from "./AktionWahl.svelte";
+
+  // Aktion schnell wechseln: ein Tipp auf die Pille öffnet die Auswahl
+  let aktion = $derived(aktionById(settings.value.aktion));
+  let wahlOffen = $state(false);
 
   let { ansicht, onBuero, onAnsicht } = $props();
 
@@ -46,6 +53,9 @@
 
   <div class="spacer"></div>
 
+  <button class="pille" aria-label={aktion ? `Aktion: ${aktion.name}, wechseln` : "Aktion wählen"} data-test="aktion-pille" onclick={() => { pop(); wahlOffen = true; }}>
+    <span class="emoji">{aktion?.emoji ?? "🎉"}</span> <span class="txt">{aktion?.name ?? "Aktion"}</span>
+  </button>
   <div class="uhr" aria-label="Uhrzeit"><span class="tag">{wochentag(kita.datum)}</span> <span class="zeit">{kita.uhrzeit}</span></div>
   {#if ansicht !== "terminal"}
     <button class="pille" aria-label="Zurück" onclick={() => onAnsicht("terminal")}><span class="emoji">🏠</span> <span class="txt">Zurück</span></button>
@@ -60,6 +70,7 @@
     <button class="pille" aria-label="Übersicht" onclick={() => onAnsicht("uebersicht")}><span class="emoji">📋</span> <span class="txt">Übersicht</span></button>
   {/if}
 </header>
+{#if wahlOffen}<AktionWahl onClose={() => (wahlOffen = false)} />{/if}
 
 <style>
   header {

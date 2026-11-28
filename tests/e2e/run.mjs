@@ -447,6 +447,49 @@ try {
     await page.getByRole("button", { name: "Kita öffnen" }).click();
   }
 
+  // ---------- Aktion schnell wechseln (Kopfzeile und Startbild) ----------
+  // Läusealarm läuft gerade (aus der Aktionen-Schleife)
+  const pille = page.locator('[data-test="aktion-pille"]');
+  await eq("Pille zeigt die laufende Aktion", async () => (await pille.textContent()).replace(/\s+/g, " ").trim(), "🔍 Läusealarm");
+  await pille.click();
+  const wahl = page.getByRole("dialog", { name: "Welche Aktion heute?" });
+  check("Ein Tipp auf die Pille öffnet die Auswahl", await sichtbar(wahl));
+  await eq("Auswahl zeigt alle Aktionen und „Keine Aktion“", async () => wahl.locator(".karte b").allTextContents(), ["🐑 Keine Aktion", "🎪 Sommerfest", "🎃 Kürbisfest", "🎄 Weihnachtsmarkt", "🔍 Läusealarm"]);
+  check("Die laufende Aktion ist markiert", (await wahl.locator('[data-aktion-karte="laeusealarm"]').getAttribute("aria-pressed")) === "true");
+  await page.waitForTimeout(300);
+  await shot("25-aktion-wahl");
+  await page.keyboard.press("Escape");
+  await wahl.waitFor({ state: "hidden" });
+  await eq("Escape ändert nichts", async () => page.evaluate(() => document.documentElement.dataset.aktion), "laeusealarm");
+  await pille.click();
+  await wahl.locator('[data-aktion-karte="sommerfest"]').click();
+  await wahl.waitFor({ state: "hidden" });
+  await eq("Karte schaltet sofort um", async () => page.evaluate(() => document.documentElement.dataset.aktion), "sommerfest");
+  check("… und die Läuse sind weg", await page.locator('[data-test="laeuse"]').count() === 0);
+  await eq("Pille zeigt die neue Aktion", async () => (await pille.textContent()).replace(/\s+/g, " ").trim(), "🎪 Sommerfest");
+  await pille.click();
+  await wahl.locator('[data-aktion-karte="keine"]').click();
+  await eq("„Keine Aktion“ beendet die Aktion", async () => page.evaluate(() => document.documentElement.dataset.aktion ?? null), null);
+  await eq("Pille ohne Aktion", async () => (await pille.textContent()).replace(/\s+/g, " ").trim(), "🎉 Aktion");
+  await page.setViewportSize({ width: 390, height: 780 });
+  await pille.click();
+  check("Handy: Auswahl ohne Querrollen", await sichtbar(wahl) && await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.waitForTimeout(300);
+  await shot("26-aktion-wahl-handy");
+  await wahl.getByRole("button", { name: "Zurück" }).click();
+  check("Handy: Kopfzeile ohne Querrollen", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.setViewportSize({ width: 1366, height: 768 });
+  // Startbild: Zeile „Heute:“
+  await page.reload();
+  const heute = page.getByRole("group", { name: "Aktion für heute" });
+  check("Startbild zeigt die Auswahl für heute", (await heute.getByRole("button", { name: "normal" }).getAttribute("aria-pressed")) === "true");
+  await heute.getByRole("button", { name: "Läusealarm" }).click();
+  await eq("Startbild: ein Tipp setzt die Aktion", async () => page.evaluate(() => document.documentElement.dataset.aktion), "laeusealarm");
+  await eq("Startbild nennt sie gleich", async () => (await page.locator(".start .aktion").textContent()).includes("Heute ist Läusealarm!"), true);
+  await page.waitForTimeout(300);
+  await shot("27-startbild-heute");
+  await page.getByRole("button", { name: "Kita öffnen" }).click();
+
   // ---------- Läusealarm (Aktion ist noch aktiv) ----------
   await eq("Läusealarm: sechs Läuse krabbeln", async () => page.locator('[data-test="laeuse"] .krabbler').count(), 6);
   const lagen = () => page.locator('[data-test="laeuse"] .krabbler').evaluateAll((els) => els.map((e) => e.style.transform).join("|"));

@@ -20,6 +20,7 @@ Spiel-Terminal für den Kuscheltier-Kindergarten, gedacht für Kinder von 4 bis 
 | Pinnwand | Knopf oben rechts: Erzieher schreiben Nachrichten für alle („Nachricht schreiben“ → wer schreibt → Text, auf Wunsch ein großes Bild). Jeder reagiert mit einem Bildchen: Bildchen antippen → „Wer bist du?“ → eigenes Profil antippen. Noch einmal dasselbe nimmt die Reaktion zurück. Die Zahl am Knopf zeigt neue Nachrichten |
 | NFC-Anhänger | Neuen Anhänger ans Gerät halten → „Wem gehört er?“ → Profil antippen. Danach öffnet der Anhänger das Fenster seines Profils; noch einmal hinhalten meldet an (mit der vorgewählten Zeit) bzw. ab. Geht mit Chrome auf Android-Geräten mit NFC; beim ersten „Kita öffnen“ fragt Chrome einmal nach der Erlaubnis |
 | Übersicht | Knopf oben rechts: Abholliste nach Uhrzeit, überschrittene Zeiten gelb, dazu alle Erzieher |
+| Aktion wechseln | Pille „🎉 Aktion“ oben rechts antippen → Karte antippen. „Keine Aktion“ beendet sie. Auf dem Startbild geht es auch über „Heute:“ |
 | Büro | Zwei Sekunden auf das Schaf oben links drücken (oder Strg + ,) |
 
 Um Mitternacht beginnt ein neuer Tag: Alle stehen wieder auf „Noch nicht da“, mehrtägige Meldungen laufen weiter. Wer abends noch angemeldet war, steht im Protokoll als „nicht abgeholt“.
@@ -36,7 +37,7 @@ Um Mitternacht beginnt ein neuer Tag: Alle stehen wieder auf „Noch nicht da“
 
 ## Aktionen
 
-Im Büro unter Einstellungen → Aktion lässt sich ein besonderer Tag einschalten. Er ändert Farben, Himmel und Startbild, und alle Schafe tragen ein Kostüm.
+Ein besonderer Tag lässt sich auf drei Wegen einschalten: mit der Pille „🎉 Aktion“ in der Kopfzeile (ein Tipp öffnet „Welche Aktion heute?“ mit Bildkarten, ein Tipp auf eine Karte schaltet um), auf dem Startbild in der Zeile „Heute:“ oder im Büro unter Einstellungen → Aktion. Er ändert Farben, Himmel und Startbild, und alle Schafe tragen ein Kostüm.
 
 | Aktion | Aussehen |
 | --- | --- |

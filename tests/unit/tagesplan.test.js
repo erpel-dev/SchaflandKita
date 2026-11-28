@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { STANDARD_PLAN, sortierePlan, planStand, planSatz, MAX_PUNKTE } from "../../src/lib/tagesplan.js";
 import { tagesbericht, abholerSauber, abholerDa } from "../../src/lib/tagebuch.js";
-import { aktionen, aktionById } from "../../src/lib/aktionen.js";
+import { aktionen, aktionById, KEINE_AKTION } from "../../src/lib/aktionen.js";
 import { pruefeImport } from "../../src/lib/profile-io.js";
 import { kita } from "../../src/lib/kita.svelte.js";
 import { db } from "../../src/lib/db.js";
@@ -49,6 +49,9 @@ test("Sätze zum Vorlesen", () => {
 test("Vier Aktionen", () => {
   assert.deepEqual(aktionen.map((a) => a.name), ["Sommerfest", "Kürbisfest", "Weihnachtsmarkt", "Läusealarm"]);
   for (const a of aktionen) assert.ok(a.id && a.emoji && a.startText && a.gruss && a.ground.length === 3, a.id);
+  // Bildkarte in der Aktionsauswahl: drei Farben (Himmel oben, unten, Wiese)
+  for (const a of [...aktionen, KEINE_AKTION]) assert.ok(a.vorschau?.length === 3 && a.vorschau.every((f) => /^#[0-9a-f]{6}$/i.test(f)), a.name);
+  assert.equal(KEINE_AKTION.id, null);
   assert.equal(aktionById("kuerbisfest").name, "Kürbisfest");
   assert.equal(aktionById("gibt-es-nicht"), null);
   assert.equal(aktionById(null), null);
