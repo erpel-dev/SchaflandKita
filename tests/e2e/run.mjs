@@ -629,7 +629,10 @@ try {
   await dlg.getByRole("button", { name: "Keine Läuse mehr?" }).click();
   const keineLaeuse = dlg.getByRole("button", { name: "Ja, keine Läuse mehr" });
   check("Läuse-Check: ohne Haken gesperrt", (await keineLaeuse.getAttribute("aria-disabled")) === "true");
+  const checkStatus = dlg.locator('[data-test="check-status"]');
+  check("Statusregion steht schon leer bereit", (await checkStatus.getAttribute("role")) === "status" && (await checkStatus.textContent()).trim() === "");
   await keineLaeuse.click({ force: true }); // Playwright klickt aria-disabled nur erzwungen; ein Kind kann tippen
+  await eq("… und die Statusregion meldet ihn", async () => (await checkStatus.textContent()).trim(), "Bitte erst beide Punkte abhaken.");
   check("Zu früh angetippt: Hinweis statt nichts", await sichtbar(dlg.locator('[data-test="check-fehlt"]')) && await dlg.locator('[data-test="laeuse-frei"]').count() === 0);
   // Doppeltipp auf einen Punkt: Der Haken bleibt (vorher war er danach wieder weg)
   await dlg.getByRole("button", { name: /gewaschen/ }).dblclick();
@@ -637,6 +640,7 @@ try {
   await keineLaeuse.click({ force: true });
   check("Läuse-Check: ein Haken reicht nicht", await dlg.locator('[data-test="laeuse-frei"]').count() === 0 && (await keineLaeuse.getAttribute("aria-disabled")) === "true");
   await dlg.getByRole("button", { name: /Ausgekämmt/ }).dblclick();
+  await eq("Mit beiden Haken ist die Statusregion wieder leer", async () => (await checkStatus.textContent()).trim(), "");
   check("Mit beiden Haken ist „Ja“ frei und der Hinweis weg", (await keineLaeuse.getAttribute("aria-disabled")) === "false" && await dlg.locator('[data-test="check-fehlt"]').count() === 0);
   await shot("23-laeuse-check");
   await keineLaeuse.click();

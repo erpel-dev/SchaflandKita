@@ -1,7 +1,7 @@
 <script>
   // Fenster eines Profils: anmelden mit Abholzeit, abholen, krank, abwesend oder mit Läusen melden, Läuse-Check
   import { modal } from "../lib/modal.js";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import Avatar from "./Avatar.svelte";
   import Uhr from "./Uhr.svelte";
   import Laus from "./Laus.svelte";
@@ -103,21 +103,30 @@
     pop();
     haken = [false, false];
     fehltNoch = false;
+    checkStatus = "";
     schritt = "check";
   }
   // Ein Tipp hakt nur ab: Ein Doppeltipp soll den Haken nicht gleich wieder wegnehmen.
   // Wer sich vertan hat, geht über „Doch noch Läuse“ zurück.
   let fehltNoch = $state(false); // „Ja“ zu früh angetippt: fehlende Punkte zeigen
+  // Für Screenreader: Die Statusregion steht schon beim Öffnen des Checks (leer) bereit, nur ihr Text ändert sich
+  let checkStatus = $state("");
   function hakenTipp(i) {
     if (haken[i]) return;
     pop();
     haken[i] = true;
-    if (haken[0] && haken[1]) fehltNoch = false;
+    if (haken[0] && haken[1]) {
+      fehltNoch = false;
+      checkStatus = "";
+    }
   }
   function jaTipp() {
     if (haken[0] && haken[1]) return checkBestanden();
     schade();
     fehltNoch = true;
+    // erst leeren, dann setzen: So wird der Hinweis auch beim zweiten zu frühen Tipp wieder vorgelesen
+    checkStatus = "";
+    tick().then(() => (checkStatus = "Bitte erst beide Punkte abhaken."));
   }
   const checkBestanden = einmal(async () => {
     await kita.laeuseFrei(id);
@@ -220,10 +229,11 @@
             </button>
           </div>
           {#if fehltNoch}
-            <p class="tipp laus" role="status" data-test="check-fehlt"><span class="emoji">☝️</span> Bitte erst beide Punkte abhaken.</p>
+            <p class="tipp laus" data-test="check-fehlt"><span class="emoji">☝️</span> Bitte erst beide Punkte abhaken.</p>
           {:else}
             <p class="tipp ok"><span class="emoji">🧑‍🏫</span> Das bestätigt ein Erwachsener.</p>
           {/if}
+          <p class="nur-vorlesen" role="status" data-test="check-status">{checkStatus}</p>
           <div class="knoepfe">
             <button class="big-btn haupt" class:gesperrt={!haken[0] || !haken[1]} aria-disabled={!haken[0] || !haken[1]} onclick={jaTipp}><span class="emoji">✅</span> Ja, keine Läuse mehr</button>
             <button class="big-btn light" onclick={dochLaeuse}>Doch noch Läuse</button>
@@ -354,6 +364,7 @@
   .pruef .fehlt { border-color: var(--laus); box-shadow: 0 0.25rem 0 var(--laus-dark); animation: wackeln 0.4s ease-in-out 2; }
   @keyframes wackeln { 25% { transform: translateX(-0.3rem); } 75% { transform: translateX(0.3rem); } }
   .big-btn.gesperrt { opacity: 0.45; }
+  .nur-vorlesen { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .pruef .an .haken { background: var(--grass); border-color: var(--grass-dark); color: #fff; }
 
   @media (max-width: 760px) {
