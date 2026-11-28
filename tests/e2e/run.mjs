@@ -159,9 +159,11 @@ try {
   // ---------- Abholen im Fenster, zurücknehmen ----------
   await kachel("Erpelküken").click();
   await eq("Fenster zeigt, wer abgeholt hat", async () => (await dlg.locator('[data-test="gegangen"]').textContent()).replace(/\s+/g, " ").trim(), "gegangen um 13:10 Uhr mit 👩 Mama");
-  await dlg.getByRole("button", { name: "Wieder da" }).click();
+  // Doppeltipp: beide Klicks kommen an, bevor die Datenbank antwortet
+  await dlg.getByRole("button", { name: "Wieder da" }).evaluate((knopf) => { knopf.click(); knopf.click(); });
   await dlg.waitFor({ state: "hidden" });
   check("Wieder da schließt das Fenster", (await namen("da")).includes("Erpelküken"));
+  check("Doppeltipp auf Wieder da meldet keinen Konflikt", !((await page.getByRole("status").allTextContents()).join(" ").includes("geändert")));
   await kachel("Erpelküken").click();
   check("Danach zeigt die Kachel den Abholen-Knopf", await sichtbar(abholknopf));
   check("… und die überschrittene Zeit", await sichtbar(dlg.locator(".spaet")));
@@ -448,13 +450,16 @@ try {
   // ---------- Läusealarm (Aktion ist noch aktiv) ----------
   await eq("Läusealarm: sechs Läuse krabbeln", async () => page.locator('[data-test="laeuse"] .krabbler').count(), 6);
   const lagen = () => page.locator('[data-test="laeuse"] .krabbler').evaluateAll((els) => els.map((e) => e.style.transform).join("|"));
+  // Der Browser meldet den Wechsel kurz verzögert: erst warten, bis die Seite ihn sieht
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForFunction(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
+  await page.waitForTimeout(100);
   const ruhig = await lagen();
   await page.clock.runFor(1500);
+  await page.waitForTimeout(300);
   check("Bewegung reduzieren: Läuse sitzen sofort still", (await lagen()) === ruhig);
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.clock.runFor(1500);
-  check("… und krabbeln danach weiter", (await lagen()) !== ruhig);
+  await eq("… und krabbeln danach weiter", async () => { await page.clock.runFor(200); return (await lagen()) !== ruhig; }, true);
   check("Läusealarm: Schafe tragen die Duschhaube", await page.locator('.brand svg path[fill="#8fd6f5"]').count() === 1);
   await kachel("Erpelküken").click(); // klappt nur, wenn die Läuse keine Tipps abfangen
   await dlg.getByRole("button", { name: "Hat Läuse" }).click();

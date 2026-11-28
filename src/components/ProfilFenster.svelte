@@ -49,6 +49,21 @@
     if (kita.status(id) === "offen") sag(`Hallo ${p.name}!`);
   });
 
+  // Kinder tippen oft doppelt. Solange eine Aktion läuft, zählt kein weiterer Tipp;
+  // sonst fände der zweite Tipp den neuen Stand vor und meldete fälschlich einen Konflikt.
+  let beschaeftigt = false;
+  function einmal(aktion) {
+    return async (...args) => {
+      if (beschaeftigt) return;
+      beschaeftigt = true;
+      try {
+        return await aktion(...args);
+      } finally {
+        beschaeftigt = false;
+      }
+    };
+  }
+
   function konflikt() {
     onClose();
     onKonflikt();
@@ -59,12 +74,12 @@
     pop();
     if (st === "da" && !(await kita.zeitAendern(id, z))) konflikt();
   }
-  async function anmelden() {
+  const anmelden = einmal(async () => {
     if (!(await kita.anmelden(id, zeit))) return konflikt();
     hallo();
     sag(kind ? `Viel Spaß, ${p.name}!` : `Guten Morgen, ${p.name}!`);
     onClose();
-  }
+  });
   /** „Abholen“ angetippt: bei Tieren erst fragen, wer abholt. */
   function abholenTipp() {
     if (kind && abholer.length) {
@@ -72,18 +87,18 @@
       schritt = "wer";
     } else abholen();
   }
-  async function abholen(von = null) {
+  const abholen = einmal(async (von = null) => {
     if (!(await kita.abholen(id, von))) return konflikt();
     tschuess();
     sag(!kind ? `Schönen Feierabend, ${p.name}!` : von ? `Tschüss ${p.name}! ${abholerDa(von.text)}` : `Tschüss ${p.name}! Bis bald!`);
     onClose();
-  }
-  async function melden() {
+  });
+  const melden = einmal(async () => {
     if (!(await kita.melden(id, schritt, datumPlus(kita.datum, tage)))) return konflikt();
     schade();
     sag(schritt === "krank" ? `Gute Besserung, ${p.name}!` : schritt === "laeuse" ? `Oje, Läuse! Gute Besserung, ${p.name}!` : `Bis bald, ${p.name}!`);
     onClose();
-  }
+  });
   function zumCheck() {
     pop();
     haken = [false, false];
@@ -93,14 +108,14 @@
     pop();
     haken[i] = !haken[i];
   }
-  async function checkBestanden() {
+  const checkBestanden = einmal(async () => {
     await kita.laeuseFrei(id);
     hallo();
     sag(`Juhu, keine Läuse mehr, ${p.name}!`);
     laeuseFrei = true;
     schritt = "haupt";
     zeit = startZeit();
-  }
+  });
   /** „Doch noch Läuse“: während der Meldung zurück, sonst gleich neu melden. */
   function dochLaeuse() {
     if (st === "offen") meldung("laeuse");
@@ -109,7 +124,7 @@
       schritt = "haupt";
     }
   }
-  async function zurueck() {
+  const zurueck = einmal(async () => {
     if (st === "abgeholt") {
       // Wieder angemeldet: Fenster schließen wie beim Anmelden, nicht gleich „Abholen“ zeigen
       if (!(await kita.wiederDa(id))) return konflikt();
@@ -120,7 +135,7 @@
     pop();
     if (!(await kita.zuruecknehmen(id))) return konflikt();
     zeit = startZeit();
-  }
+  });
   /** Der Anhänger des Profils wurde noch einmal hingehalten: das Naheliegende tun. */
   export function bestaetigen() {
     if (schritt !== "haupt" && schritt !== "wer") return;
